@@ -1,0 +1,76 @@
+@import './base.css';
+
+html {
+  font-size: calc(100vw / 1920 * 14);
+}
+body {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+}
+#app {
+  color: #495057;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+.centerdispley {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.itemdisplay {
+  display: flex;
+  align-items: center;
+}
+
+.display-between {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* 文本超出隐藏 */
+.text-hidden {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+  overflow: hidden;
+}
+
+.text-hidden-two {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis
+}
+
+.image_view{
+  display: block;
+  width: 100%;
+  height: 100%;
+  -webkit-user-drag: none;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+@media (min-width: 1920px) {
+  html {
+    font-size: 14px;
+  }
+}
+@media (max-width: 1620px) {
+  html {
+    font-size: 11.81px;
+  }
+}
