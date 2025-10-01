@@ -1,11 +1,481 @@
-<template>
+﻿<template>
   <div class="simModeling-container">
     <div ref="container" class="simModeling-map"></div>
+    <aside class="simModeling-panel">
+      <a-tabs v-model:activeKey="activeTab" type="card" size="small" class="panel-tabs">
+        <a-tab-pane key="system" tab="系统配置">
+          <div style="margin-top: 16px;" class="panel-stack">
+            <div class="panel-card__block">
+              <a-button style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">创建</a-button>
+            </div>
+            <div class="panel-card__tags">
+              <a-tag v-for="opt in experimentOptions" closable @close.prevent>{{ opt.label }}</a-tag>
+            </div>
+            <FormNumberField
+              label="到达间隔"
+              v-model="systemState.arrivalInterval"
+              :wrapper-style="{ marginBottom: '5px' }"
+              :min="0"
+              :step="1"
+              unit="秒"
+            />
+            <FormNumberField
+              label="仿真时间"
+              v-model="systemState.simulationTime"
+              :min="0"
+              :step="100"
+              unit="秒"
+            />
+
+            <a-collapse v-model:activeKey="systemCollapseKeys" expand-icon-position="end" class="panel-collapse-group">
+              <a-collapse-panel key="strategy" header="资源调度参数">
+                <a-space direction="vertical" class="panel-space">
+                  <div class="panel-block">
+                    <div style="margin-bottom: 8px;" class="panel-block__label">机械臂任务分配策略</div>
+                    <a-radio-group v-model:value="systemState.armStrategy">
+                      <a-radio value="distance">最短路径优先</a-radio>
+                      <a-radio value="balance">负载均衡</a-radio>
+                    </a-radio-group>
+                  </div>
+                  <div>
+                    <div style="margin-bottom: 8px;" class="panel-block__label">腔室选择策略</div>
+                    <a-radio-group v-model:value="systemState.chamberStrategy" style="height: 68px;display: flex;flex-direction: column;justify-content: space-around;">
+                      <a-radio value="optimized">优先使用最近空闲腔室</a-radio>
+                      <a-radio value="process">按工艺参数匹配腔室选择</a-radio>
+                    </a-radio-group>
+                  </div>
+                </a-space>
+              </a-collapse-panel>
+              <a-collapse-panel key="capacity" header="容量参数">
+                <a-space direction="vertical" :size="16" class="panel-space">
+                  <div>
+                    <div class="panel-caption">
+                      <div class="panel-block__label">设备故障重试</div>
+                      <a-input-number
+                        v-model:value="systemState.faultRetryLimit"
+                        :min="0"
+                        addon-after="次"
+                        class="panel-input-number"
+                      />
+                    </div>
+                    <div class="panel-hint">如机械臂取片失败后重试 2 次</div>
+                  </div>
+                  <div>
+                    <div class="panel-caption">
+                      <div class="panel-block__label">超时阈值</div>
+                      <a-input-number
+                        v-model:value="systemState.timeoutThreshold"
+                        :min="0"
+                        :step="1"
+                        class="panel-input-number"
+                        addon-after="秒"
+                      />
+                    </div>
+                    <div class="panel-hint">如腔室长时间未响应则切换空闲腔室</div>
+                  </div>
+                </a-space>
+              </a-collapse-panel>
+              <a-collapse-panel key="alerts" header="异常检测阈值">
+                <div class="panel-caption">
+                  <div class="panel-block__label">阈值</div>
+                  <a-input-number
+                    v-model:value="systemState.particleAlertThreshold"
+                    :min="0"
+                    addon-after="个"
+                    class="panel-input-number"
+                  />
+                </div>
+                <div class="panel-hint">如 particle 数量超过 5 个/片则抛出异常</div>
+              </a-collapse-panel>
+            </a-collapse>
+          </div>
+        </a-tab-pane>
+
+        <a-tab-pane key="parameter" tab="参数控制">
+          <div class="panel-stack">
+            <a-collapse v-model:activeKey="parameterCollapseKeys" expand-icon-position="end" class="panel-collapse-group">
+              <a-collapse-panel key="cassette" header="晶圆盒系统（Cassette）">
+                <a-space direction="vertical" :size="16" class="panel-space">
+                  <FormNumberField
+                    label="晶圆盒数量"
+                    v-model="parameterState.waferCassetteCount"
+                    :min="0"
+                    unit="盒"
+                  />
+                  <FormNumberField
+                    label="晶圆盒容量"
+                    v-model="parameterState.waferCassetteCapacity"
+                    :min="0"
+                    unit="片"
+                  />
+                  <a-checkbox style="margin-left: 120px;" v-model:checked="parameterState.unlimitedWaferSupply">晶圆原料无限供应</a-checkbox>
+                </a-space>
+              </a-collapse-panel>
+
+              <a-collapse-panel key="transfer" header="传输机械臂系统（Transfer Robot）">
+                <a-space direction="vertical" :size="8" class="panel-space">
+                  <div class="card-header">大气机械臂</div>
+                  <div class="line"></div>
+                  <FormNumberField
+                    label="数量"
+                    v-model="parameterState.atmosphereArmCount"
+                    :min="0"
+                    unit="个"
+                  />
+                  <a-radio-group style="margin-left: 114px;" v-model:value="parameterState.atmosphereArmMode">
+                    <a-radio value="single">单臂</a-radio>
+                    <a-radio value="dual">双臂</a-radio>
+                  </a-radio-group>
+                  <FormRangeField
+                    label="传输时间"
+                    v-model="parameterState.atmosphereTransferTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+
+                  <div class="card-header">真空机械臂</div>
+                  <div class="line"></div>
+                  <FormNumberField
+                    label="数量"
+                    v-model="parameterState.vacuumArmCount"
+                    :min="0"
+                    unit="个"
+                  />
+                  <a-radio-group style="margin-left: 114px;" v-model:value="parameterState.vacuumArmMode">
+                    <a-radio value="single">单臂</a-radio>
+                    <a-radio value="dual">双臂</a-radio>
+                  </a-radio-group>
+                  <FormRangeField
+                    label="传输时间"
+                    v-model="parameterState.vacuumTransferTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                </a-space>
+              </a-collapse-panel>
+
+              <a-collapse-panel key="edge" header="晶圆寻边器（Edge Detector）">
+                <a-space direction="vertical" :size="8" class="panel-space">
+                  <FormRangeField
+                    label="单晶圆寻边耗时"
+                    v-model="parameterState.edgeSeekTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormNumberField
+                    label="连续工作次数"
+                    v-model="parameterState.edgeContinuousRunCount"
+                    :min="0"
+                    unit="片"
+                  />
+                  <FormRangeField
+                    label="校准耗时"
+                    v-model="parameterState.edgeCalibrationTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                </a-space>
+              </a-collapse-panel>
+
+              <a-collapse-panel key="load" header="真空过渡腔（Load Lock）">
+                <a-space direction="vertical" :size="8" class="panel-space">
+                  <div class="card-header">工艺时间</div>
+                  <div class="line"></div>
+                  <FormRangeField
+                    label="抽真空时间"
+                    v-model="parameterState.loadLockPumpDownTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="充气时间"
+                    v-model="parameterState.loadLockVentTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+
+                  <div class="card-header">真空参数</div>
+                  <div class="line"></div>
+                  <FormNumberField
+                    label="极限真空度"
+                    v-model="parameterState.loadLockUltimateVacuum"
+                    :min="0"
+                    unit="Torr 级别"
+                  />
+                  <FormNumberField
+                    label="抽真空速率"
+                    v-model="parameterState.loadLockPumpSpeed"
+                    :min="0"
+                    unit="秒"
+                  />
+                  <div class="panel-hint">如从大气压到 10⁻³ Torr 需 30~60秒</div>
+                  <FormNumberField
+                    label="保压性能"
+                    v-model="parameterState.dryCleanCycleCount"
+                    :min="0"
+                    unit="个"
+                  />
+                  <div class="panel-hint">气体如 O₂、N₂/H₂混合气体</div>
+
+                  <div class="card-header">干燥参数</div>
+                  <div class="line"></div>
+                  <FormRangeField
+                    label="干燥时间"
+                    v-model="parameterState.dryingTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="干燥气体压力"
+                    v-model="parameterState.dryingGasPressureRange"
+                    unit="MPa"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                </a-space>
+              </a-collapse-panel>
+
+              <a-collapse-panel key="etch" header="蚀刻腔室（Etching Chamber）">
+                <a-space direction="vertical" :size="8" class="panel-space">
+                  <FormNumberField
+                    label="蚀刻腔室数量"
+                    v-model="parameterState.etchChamberCount"
+                    :min="0"
+                    unit="台"
+                  />
+                  <div class="card-header">工艺时间（单次蚀刻时长）</div>
+                  <div class="line"></div>
+                  <FormRangeField
+                    label="A腔室"
+                    v-model="parameterState.etchChamberATimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="B腔室"
+                    v-model="parameterState.etchChamberBTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="C腔室"
+                    v-model="parameterState.etchChamberCTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="D腔室"
+                    v-model="parameterState.etchChamberDTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="E腔室"
+                    v-model="parameterState.etchChamberETimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="F腔室"
+                    v-model="parameterState.etchChamberFTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+
+                  <div class="card-header">真空参数</div>
+                  <div class="line"></div>
+                  <FormRangeField
+                    label="工作真空度"
+                    v-model="parameterState.etchWorkingVacuumRange"
+                    unit="mTorr"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="抽气系统抽速"
+                    v-model="parameterState.etchPumpSpeedRange"
+                    unit="L/s"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+
+                  <div class="card-header">等离子参数</div>
+                  <div class="line"></div>
+                  <FormRangeField
+                    label="RF功率"
+                    v-model="parameterState.rfPowerRange"
+                    unit="W"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormNumberField
+                    label="频率"
+                    v-model="parameterState.rfFrequency"
+                    :min="0"
+                    unit="MHz"
+                  />
+                  <FormRangeField
+                    label="偏压功率"
+                    v-model="parameterState.biasPowerRange"
+                    unit="W"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+
+                  <div class="card-header">气体参数</div>
+                  <div class="line"></div>
+                  <FormNumberField
+                    label="蚀刻气体种类"
+                    v-model="parameterState.etchGasTypeCount"
+                    :min="0"
+                    unit="种"
+                  />
+                  <FormNumberField
+                    label="气体流量控制精度"
+                    v-model="parameterState.gasFlowControlAccuracy"
+                    :min="0"
+                    unit="sccm"
+                  />
+                  <FormNumberField
+                    label="气体混合比例"
+                    v-model="parameterState.gasMixRatio"
+                    :min="0"
+                    unit="%"
+                  />
+
+                  <div class="card-header">温度参数</div>
+                  <div class="line"></div>
+                  <FormRangeField
+                    label="晶圆台温度"
+                    v-model="parameterState.waferChuckTemperatureRange"
+                    unit="℃"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="腔室壁温"
+                    v-model="parameterState.chamberWallTemperatureRange"
+                    unit="℃"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                </a-space>
+              </a-collapse-panel>
+
+              <a-collapse-panel key="clean" header="清洗腔室（Cleaning Chamber）">
+                <a-space direction="vertical" :size="16" class="panel-space">
+                  <FormNumberField
+                    label="清洗腔室数量"
+                    v-model="parameterState.cleaningChamberCount"
+                    :min="0"
+                    unit="台"
+                  />
+                  <div class="card-header">清洗参数</div>
+                  <div class="line"></div>
+                  <FormRangeField
+                    label="清洗时间"
+                    v-model="parameterState.cleaningTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="清洗功率"
+                    v-model="parameterState.cleaningPowerRange"
+                    unit="W"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="气体流量"
+                    v-model="parameterState.cleaningGasFlowRange"
+                    unit="sccm"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+
+                  <div class="card-header">清洗方式</div>
+                  <div class="line"></div>
+                  <div class="panel-caption">
+                    <div class="panel-block__label">干法清洗</div>
+                    <a-input-number
+                      v-model:value="parameterState.dryCleanCycleCount"
+                      :min="0"
+                      addon-after="次"
+                      class="panel-input-number"
+                    />
+                  </div>
+                  <div class="panel-hint">常用 O₂、N₂/H₂ 混合气体</div>
+
+                  <div class="card-header">干燥参数</div>
+                  <div class="line"></div>
+                  <FormRangeField
+                    label="干燥时间"
+                    v-model="parameterState.dryingTimeRange"
+                    unit="秒"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                  <FormRangeField
+                    label="干燥气体压力"
+                    v-model="parameterState.dryingGasPressureRange"
+                    unit="MPa"
+                    :min="0"
+                    :slider-min="1"
+                    :slider-max="30"
+                  />
+                </a-space>
+              </a-collapse-panel>
+            </a-collapse>
+          </div>
+        </a-tab-pane>
+      </a-tabs>
+    </aside>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, ref } from "vue";
+import { onMounted, onBeforeUnmount, ref, reactive, watch, h } from "vue";
+import { PlusCircleOutlined } from '@ant-design/icons-vue';
+import FormNumberField from '@/components/common/FormNumberField.vue';
+import FormRangeField from '@/components/common/FormRangeField.vue';
 import mapImage from "@/assets/images/map/map.png";
 import Map from "ol/Map";
 import View from "ol/View";
@@ -20,6 +490,7 @@ import Style from "ol/style/Style";
 import Fill from "ol/style/Fill";
 import Stroke from "ol/style/Stroke";
 import { getCenter } from "ol/extent";
+import arm1 from "@/assets/images/map/arm1.png";
 
 const emit = defineEmits(["regionClick"]);
 
@@ -43,6 +514,73 @@ const DEFAULT_PADDING = 120;
 const INITIAL_ZOOM_OUT_STEPS = 3;
 const MIN_ZOOM = -1;
 const EXTENT_EXPANSION_RATIO = 1;
+
+const activeTab = ref("system");
+
+const experimentOptions = [
+  { label: "实验室1", value: "lab-1" },
+  { label: "实验室2", value: "lab-2" }
+];
+
+const systemState = reactive({
+  activeExperiment: experimentOptions[0].value,
+  arrivalInterval: 10,
+  simulationTime: 10000,
+  armStrategy: "distance",
+  chamberStrategy: "optimized",
+  faultRetryLimit: 2,
+  timeoutThreshold: 10,
+  particleAlertThreshold: 5
+});
+
+const systemCollapseKeys = ref(['strategy', 'capacity', 'alerts']);
+
+const parameterState = reactive({
+  waferCassetteCount: 4,
+  waferCassetteCapacity: 1000,
+  unlimitedWaferSupply: true,
+  atmosphereArmCount: 1,
+  atmosphereArmMode: "single",
+  atmosphereTransferTimeRange: [10, 15],
+  vacuumArmCount: 1,
+  vacuumArmMode: "single",
+  vacuumTransferTimeRange: [12, 18],
+  edgeSeekTimeRange: [6, 9],
+  edgeContinuousRunCount: 5,
+  edgeCalibrationTimeRange: [4, 6],
+  loadLockPumpDownTimeRange: [8, 12],
+  loadLockVentTimeRange: [6, 9],
+  loadLockUltimateVacuum: 5,
+  loadLockPumpSpeed: 45,
+  loadLockPressureHold: "",
+  loadLockVentSpeed: 35,
+  etchChamberCount: 6,
+  etchChamberATimeRange: [60, 75],
+  etchChamberBTimeRange: [60, 75],
+  etchChamberCTimeRange: [60, 75],
+  etchChamberDTimeRange: [60, 75],
+  etchChamberETimeRange: [60, 75],
+  etchChamberFTimeRange: [60, 75],
+  etchWorkingVacuumRange: [3, 5],
+  etchPumpSpeedRange: [500, 600],
+  rfPowerRange: [500, 700],
+  rfFrequency: 13,
+  biasPowerRange: [100, 150],
+  etchGasTypeCount: 3,
+  gasFlowControlAccuracy: 1,
+  gasMixRatio: 50,
+  waferChuckTemperatureRange: [180, 220],
+  chamberWallTemperatureRange: [120, 150],
+  cleaningChamberCount: 1,
+  cleaningTimeRange: [20, 25],
+  cleaningPowerRange: [500, 600],
+  cleaningGasFlowRange: [50, 80],
+  dryCleanCycleCount: 3,
+  dryingTimeRange: [15, 20],
+  dryingGasPressureRange: [1, 2]
+});
+
+const parameterCollapseKeys = ref([]);
 
 const loadImageExtent = (src) => {
   return new Promise((resolve, reject) => {
@@ -215,6 +753,7 @@ const addImageOverlay = ({ src, coordinate, size, positioning = "center-center" 
 
 onMounted(async () => {
   await initializeMap();
+  addImageOverlay({ src: arm1, coordinate: [400, 300], size: [60, 60] });
 });
 
 onBeforeUnmount(() => {
@@ -232,6 +771,7 @@ defineExpose({
   width: 100%;
   height: 100%;
   display: flex;
+  border-top: 1px solid #e6e9ef;
 }
 
 .simModeling-map {
@@ -239,10 +779,177 @@ defineExpose({
   min-height: 400px;
 }
 
+.simModeling-panel {
+  width: 360px;
+  background: #ffffff;
+  border-left: 1px solid #e6e9ef;
+  display: flex;
+  flex-direction: column;
+  max-height: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.simModeling-panel :deep(.ant-tabs-nav) {
+  margin: 0;
+}
+
+.simModeling-panel :deep(.ant-tabs-content-holder) {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.simModeling-panel :deep(.ant-tabs-content) {
+  flex: 1;
+  height: calc(100vh - 7.5rem);
+}
+
+.simModeling-panel :deep(.ant-tabs-tabpane) {
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 8px;
+}
+
+.panel-tabs {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.panel-stack {
+  /* padding: 12px; */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.panel-card {
+  border-radius: 10px;
+}
+
+.panel-card__block {
+  margin-left: 20px;
+}
+
+.panel-card__tags {
+  padding-left: 20px;
+  padding-bottom: 10px;
+  border-bottom: solid 1px #e6e9ef;
+}
+
+.panel-card__tags :deep(.ant-tag) {
+  height: 28px;
+  line-height: 26px;
+  border-radius: 15px;
+}
+
+.panel-card :deep(.ant-card-head) {
+  min-height: 36px;
+}
+
+.panel-card :deep(.ant-card-body) {
+  padding-top: 12px;
+}
+
+.panel-collapse-group,
+.panel-sub-collapse {
+  background: #fff;
+  border-radius: 0;
+  border: 0;
+  border-top: 1px solid #d9d9d9;
+  overflow: hidden;
+}
+
+.panel-collapse-group :deep(.ant-collapse-content-box),
+.panel-sub-collapse :deep(.ant-collapse-content-box) {
+  padding: 15px;
+}
+
+.panel-transfer :deep(.ant-collapse-content-box) {
+  padding: 0px;
+}
+
+.panel-sub-col :deep(.ant-collapse-content-box){
+  padding: 15px;
+}
+
+.card-header {
+  border-left: 2px solid #007BFF;
+  font-size: 16px;
+  color: #333;
+  padding-left: 12px;
+  line-height: 18px;
+}
+
+.line {
+  height: 1px;
+  background-color: #D5DBE0;
+  margin-bottom: 8px;
+}
+
+.panel-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0px 15px;
+}
+
+.panel-field__label {
+  color: #1f2a44;
+  font-size: 13px;
+  width: 100px;
+}
+
+.panel-input-number {
+  width: 196px;
+}
+
+.panel-block {
+  margin-bottom: 16px;
+}
+
+.panel-caption {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-block__label {
+  font-size: 13px;
+  color: #4a5775;
+}
+
+.panel-hint {
+  margin-top: 6px;
+  color: #2484FA;
+  font-size: 12px;
+  margin-left: 120px;
+}
+
+.panel-space {
+  width: 100%;
+}
+
+.panel-module-list {
+  border-radius: 10px;
+}
+
+.panel-module-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-module-link {
+  font-size: 12px;
+}
+
 .overlay-image {
   pointer-events: none;
 }
 </style>
-
 
 

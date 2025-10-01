@@ -41,6 +41,9 @@ importers:
       litegraph.js:
         specifier: ^0.7.18
         version: 0.7.18
+      lodash-es:
+        specifier: ^4.17.21
+        version: 4.17.21
       ol:
         specifier: ^10.6.1
         version: 10.6.1

@@ -7,6 +7,7 @@ import { createPinia } from "pinia";
 import piniaPersist from "pinia-plugin-persist";
 import App from "./App.vue";
 import router from "./router";
+import Antd from "ant-design-vue";
 
 // 清除可能损坏的 localStorage 数据
 try {
@@ -27,6 +28,7 @@ const app = createApp(App);
 const pinia = createPinia();
 pinia.use(piniaPersist); // 使用插件
 
+app.use(Antd);
 app.use(pinia); // 注册 Pinia
 
 app.use(router);
