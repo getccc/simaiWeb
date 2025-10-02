@@ -472,7 +472,7 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, ref, reactive, watch, h } from "vue";
+import { onMounted, onBeforeUnmount, ref, reactive, watch, h, computed } from "vue";
 import { PlusCircleOutlined } from '@ant-design/icons-vue';
 import FormNumberField from '@/components/common/FormNumberField.vue';
 import FormRangeField from '@/components/common/FormRangeField.vue';
@@ -483,28 +483,36 @@ import ImageLayer from "ol/layer/Image";
 import VectorLayer from "ol/layer/Vector";
 import ImageStatic from "ol/source/ImageStatic";
 import VectorSource from "ol/source/Vector";
-import Draw from "ol/interaction/Draw";
 import Overlay from "ol/Overlay";
+import Feature from "ol/Feature";
+import Polygon from "ol/geom/Polygon";
 import Projection from "ol/proj/Projection";
+import { unByKey } from "ol/Observable";
 import Style from "ol/style/Style";
 import Fill from "ol/style/Fill";
 import Stroke from "ol/style/Stroke";
 import { getCenter } from "ol/extent";
 import arm1 from "@/assets/images/map/arm1.png";
+import arm2 from "@/assets/images/map/arm2.png";
+import edge from "@/assets/images/map/edge.png";
+import chamber from "@/assets/images/map/chamber.png";
 
-const emit = defineEmits(["regionClick"]);
+const emit = defineEmits(["regionClick", "mapClick"]);
 
 const container = ref(null);
 const mapInstance = ref(null);
-const drawInteraction = ref(null);
 const overlays = [];
+let pointerMoveListenerKey = null;
+let lastHoveredFeature = null;
 
 const vectorSource = new VectorSource();
 const regionStyle = new Style({
   fill: new Fill({ color: "rgba(30, 144, 255, 0.25)" }),
   stroke: new Stroke({ color: "#1e90ff", width: 2 })
 });
-
+const defaultStyle = new Style({
+  fill: new Fill({ color: "rgba(30, 144, 255, 0)" })
+});
 const vectorLayer = new VectorLayer({
   source: vectorSource,
   style: regionStyle
@@ -581,6 +589,110 @@ const parameterState = reactive({
 });
 
 const parameterCollapseKeys = ref([]);
+const clickedCom = ref(null);
+
+const comPos = [
+  {
+    id: 'cassette1',
+    name: '晶圆盒',
+    key: 'cassette',
+    position: [[430, 180],[430, 32],[1150, 32],[1150, 180]],
+    bgImage: chamber,
+    bgImageSize: [60, 60],
+    bgImageCoor: [[528, 110], [697, 110], [866, 110], [1041, 110]],
+    bgOverlay: null
+  },
+  {
+    id: 'arm1',
+    name: '大气机械臂1',
+    key: 'transfer',
+    position: [[520, 400],[520, 230],[720, 230],[720, 400]],
+    bgImage: arm1,
+    bgImageSize: [60, 60],
+    bgImageCoor: [[610, 340]],
+    bgOverlay: null
+  },
+  {
+    id: 'edge1',
+    name: '晶圆寻边器',
+    key: 'edge',
+    position: [[300, 400],[300, 285],[440, 285],[440, 400]],
+    bgImage: edge,
+    bgImageSize: [60, 60],
+    bgImageCoor: [[378, 352]],
+    bgOverlay: null
+  },
+  {
+    id: 'load1',
+    name: '真空过渡腔',
+    key: 'load',
+    position: [[690, 668],[690, 490],[872, 490],[872, 668]],
+    bgImage: chamber,
+    bgImageSize: [60, 60],
+    bgImageCoor: [[785, 580]],
+    bgOverlay: null
+  },
+  {
+    id: 'arm2',
+    name: '真空机械臂',
+    key: 'transfer',
+    position: [[600, 1090],[600, 730],[970, 730],[970, 1090]],
+    bgImage: arm2,
+    bgImageSize: [115, 115],
+    bgImageCoor: [[780, 910]],
+    bgOverlay: null
+  },
+  {
+    id: 'clean1',
+    name: '清洗腔室1',
+    key: 'clean',
+    position: [[525, 668],[525, 490],[690, 490],[690, 668]],
+    bgImage: edge,
+    bgImageSize: [60, 60],
+    bgImageCoor: [[611, 588]],
+    bgOverlay: null
+  },
+  {
+    id: 'clean2',
+    name: '清洗腔室2',
+    key: 'clean',
+    position: [[872, 668],[872, 490],[1050, 490],[1050, 668]],
+    bgImage: edge,
+    bgImageSize: [60, 60],
+    bgImageCoor: [[958, 588]],
+    bgOverlay: null
+  },
+  {
+    id: 'etch1',
+    name: '蚀刻腔室1',
+    key: 'etch',
+    position: [[333, 1135],[333, 702],[555, 702],[555, 1135]],
+    bgImage: chamber,
+    bgImageSize: [90, 90],
+    bgImageCoor: [[440, 800], [440, 1020]],
+    bgOverlay: null
+  },
+  {
+    id: 'etch2',
+    name: '蚀刻腔室2',
+    key: 'etch',
+    position: [[560, 1350],[560, 1140],[1000, 1140],[1000, 1350]],
+    bgImage: chamber,
+    bgImageSize: [90, 90],
+    bgImageCoor: [[675, 1235], [895, 1235]],
+    bgOverlay: null
+  },
+  {
+    id: 'etch3',
+    name: '蚀刻腔室3',
+    key: 'etch',
+    position: [[1000, 1135],[1000, 700],[1225, 700],[1225, 1135]],
+    bgImage: chamber,
+    bgImageSize: [90, 90],
+    bgImageCoor: [[1120, 800], [1120, 1020]],
+    bgOverlay: null
+  },
+]
 
 const loadImageExtent = (src) => {
   return new Promise((resolve, reject) => {
@@ -606,11 +718,51 @@ const handleMapClick = (event) => {
   const map = mapInstance.value;
   if (!map) return;
 
+  const coordinate = Array.isArray(event.coordinate) ? [...event.coordinate] : null;
   const feature = map.forEachFeatureAtPixel(event.pixel, (feat) => feat);
-  if (feature) {
-    emit("regionClick", { feature, coordinate: event.coordinate });
+  emit("mapClick", { feature: feature ?? null, coordinate });
+
+  if (!feature) {
+    console.log("Map clicked at", coordinate ? coordinate.join(", ") : "unknown coordinate");
+  } else {
+    const id = feature.getId();
+    clickedCom.value = id;
+    activeTab.value = "parameter";
+    handleComOVerlay(id, 1);
+    const item = comPos.find(i => i.id === id);
+    parameterCollapseKeys.value = item ? [item.key] : [];
+    emit("regionClick", { feature, coordinate });
   }
 };
+
+const handlePointerMove = (event) => {
+  const map = mapInstance.value;
+  if (!map) return;
+
+  const feature = map.forEachFeatureAtPixel(event.pixel, (feat) => feat);
+  if (feature !== lastHoveredFeature) {
+    if (feature) {
+      const id = feature.getId();
+      id !== clickedCom.value && handleComOVerlay(id, 0.5);
+    } else {
+      handleComOVerlay(clickedCom.value, 1);
+    }
+    lastHoveredFeature = feature || null;
+  }
+};
+
+const handleComOVerlay = (id, opacity) => {
+  comPos.forEach(item => {
+    const value = item.id === clickedCom.value ? 1 : (id === item.id ? opacity : 0);
+    if (item.bgOverlay) {
+      item.bgOverlay.forEach(overlay => {
+        const bgImg = overlay.element.querySelectorAll('img')[0];
+        if (bgImg)
+        bgImg.style.opacity = value;
+      });
+    }
+  });
+}
 
 const initializeMap = async () => {
   if (!container.value) return;
@@ -666,6 +818,7 @@ const initializeMap = async () => {
     }
 
     mapInstance.value.on("singleclick", handleMapClick);
+    pointerMoveListenerKey = mapInstance.value.on("pointermove", handlePointerMove);
   } catch (error) {
     // eslint-disable-next-line no-console
     console.error("Failed to initialize OpenLayers map", error);
@@ -682,9 +835,10 @@ const disposeMap = () => {
   });
   overlays.length = 0;
 
-  if (drawInteraction.value) {
-    mapInstance.value.removeInteraction(drawInteraction.value);
-    drawInteraction.value = null;
+  if (pointerMoveListenerKey) {
+    unByKey(pointerMoveListenerKey);
+    pointerMoveListenerKey = null;
+    lastHoveredFeature = null;
   }
 
   mapInstance.value.setTarget(undefined);
@@ -693,37 +847,71 @@ const disposeMap = () => {
 
 const drawRegionOnBasemap = (options = {}) => {
   const map = mapInstance.value;
-  if (!map) return;
+  if (!map) return null;
 
-  if (drawInteraction.value) {
-    map.removeInteraction(drawInteraction.value);
-    drawInteraction.value = null;
+  const {
+    id,
+    type = "Polygon",
+    points = [],
+    style = regionStyle,
+    clearExisting = true,
+    onComplete
+  } = options;
+
+  if (!Array.isArray(points) || points.length < 3) {
+    console.warn('drawRegionOnBasemap requires at least three points to form a polygon.');
+    return null;
   }
 
-  const { type = "Polygon", style = regionStyle, onComplete } = options;
+  const normalizedPoints = points
+    .map((coordinate) => {
+      if (Array.isArray(coordinate) && coordinate.length === 2) {
+        const [x, y] = coordinate;
+        const nx = Number(x);
+        const ny = Number(y);
+        if (!Number.isNaN(nx) && !Number.isNaN(ny)) {
+          return [nx, ny];
+        }
+      }
+      return null;
+    })
+    .filter(Boolean);
 
-  const draw = new Draw({
-    source: vectorSource,
-    type
-  });
+  if (normalizedPoints.length < 3) {
+    console.warn('drawRegionOnBasemap received invalid points, unable to draw.');
+    return null;
+  }
 
-  drawInteraction.value = draw;
-  map.addInteraction(draw);
+  const [firstX, firstY] = normalizedPoints[0];
+  const [lastX, lastY] = normalizedPoints[normalizedPoints.length - 1];
+  if (firstX !== lastX || firstY !== lastY) {
+    normalizedPoints.push([firstX, firstY]);
+  }
 
-  draw.once("drawend", (evt) => {
-    const feature = evt.feature;
-    feature.setStyle(style || regionStyle);
+  if (clearExisting) {
+    vectorSource.clear();
+  }
 
-    map.removeInteraction(draw);
-    drawInteraction.value = null;
+  if (type !== 'Polygon') {
+    console.warn(`Unsupported geometry type "${type}". Only Polygon is supported.`);
+  }
 
-    if (typeof onComplete === "function") {
-      onComplete(feature);
-    }
-  });
+  const geometry = new Polygon([normalizedPoints]);
+  const feature = new Feature({ geometry });
+  feature.setStyle(style || regionStyle);
+  feature.setId(id);
+  vectorSource.addFeature(feature);
+
+  if (typeof onComplete === 'function') {
+    onComplete(feature);
+  }
+
+  map.render();
+
+  return feature;
 };
 
-const addImageOverlay = ({ src, coordinate, size, positioning = "center-center" }) => {
+const addImageOverlay = ({ src, coordinate, size, opacity, positioning = "center-center" }) => {
   const map = mapInstance.value;
   if (!map || !Array.isArray(coordinate) || coordinate.length !== 2) return null;
 
@@ -731,6 +919,10 @@ const addImageOverlay = ({ src, coordinate, size, positioning = "center-center" 
   element.src = src;
   element.alt = "overlay-image";
   element.className = "overlay-image";
+
+  if (typeof opacity === "number" && opacity >= 0 && opacity <= 1) {
+    element.style.opacity = opacity;
+  }
 
   if (size && size.length === 2) {
     const [width, height] = size;
@@ -753,7 +945,28 @@ const addImageOverlay = ({ src, coordinate, size, positioning = "center-center" 
 
 onMounted(async () => {
   await initializeMap();
-  addImageOverlay({ src: arm1, coordinate: [400, 300], size: [60, 60] });
+  
+  comPos.forEach(item => {
+    drawRegionOnBasemap({
+      id: item.id,
+      points: item.position,
+      style: defaultStyle,
+      clearExisting: false,
+      onComplete: (feature) => {
+        feature.set('info', item);
+      }
+    });
+    if (Array.isArray(item.bgImageCoor)) {
+      let bgOverlay = [];
+      item.bgImageCoor.forEach(coor => {
+        const overlay = addImageOverlay({ src: item.bgImage, coordinate: coor, size: item.bgImageSize, opacity: 0 });
+        if (overlay) {
+          bgOverlay.push(overlay);
+        }
+      });
+      item.bgOverlay = bgOverlay;
+    }
+  });
 });
 
 onBeforeUnmount(() => {
@@ -947,9 +1160,21 @@ defineExpose({
   font-size: 12px;
 }
 
+.panel-click-info {
+  margin: 8px 15px 0;
+  padding: 6px 12px;
+  background: #f5f7fb;
+  border-radius: 6px;
+  color: #4a5775;
+  font-size: 12px;
+}
+
+.panel-click-info span {
+  color: #2484FA;
+  font-weight: 600;
+}
+
 .overlay-image {
   pointer-events: none;
 }
 </style>
-
-
