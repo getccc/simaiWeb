@@ -28,7 +28,7 @@
                     <img :src="item.icon" alt="icon" style="width: 60px; height: 60px; margin-right: 6px;" />
                   </div>
                   <div>
-                    <div>
+                    <div class="chamber__count">
                       <span class="chamber__value">{{ item.value }}</span>
                       <span class="chamber__unit"> {{ item.unit }}</span>
                     </div>
@@ -283,12 +283,17 @@ const metricsWithMeta = computed(() =>
   background: #f3f5f9;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  height: 100%;
+  justify-content: flex-start;
+  /* limit component height to viewport minus a small header area (adjust 72px if your header is different) */
+  max-height: calc(100vh - 242px);
+  overflow: hidden;
 }
 
 .simAnalysis-base :deep(.ant-card-body) {
-  padding: 0 24px 24px 24px;
+  padding: 0 24px 8px 24px;
+  /* allow card body to scroll if content grows too tall */
+  overflow: auto;
+  max-height: calc(100vh - 200px);
 }
 
 .base-row {
@@ -306,8 +311,10 @@ const metricsWithMeta = computed(() =>
 }
 
 .chamber_box {
-  width: 200px;
-  height: 288px;
+  width: 100%;
+  max-width: 260px;
+  height: auto;
+  max-height: 36vh;
   background: linear-gradient(180deg, #ffffff 0%, #ffffff 48%, #e6f3ff 88%, #d0e7ff 100%);
   padding: 8px;
   margin-right: 16px;
@@ -321,8 +328,14 @@ const metricsWithMeta = computed(() =>
 
 .chamber__item {
   display: flex;
-  width: 200px;
-  margin-bottom: 16px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.chamber__count {
+  display: flex;
+  align-items: center;
+  width: 80px;
 }
 
 .chamber__value {
@@ -360,7 +373,7 @@ const metricsWithMeta = computed(() =>
 }
 
 .base-info-item + .base-info-item {
-  margin-top: 8px;
+  margin-top: 5px;
 }
 
 .base-info-item__icon {
@@ -423,7 +436,7 @@ const metricsWithMeta = computed(() =>
 }
 
 .machine-card__value {
-  font-size: 26px;
+  font-size: 24px;
   color: #0f1f49;
   font-weight: 600;
 }
@@ -442,14 +455,14 @@ const metricsWithMeta = computed(() =>
 .performance-card {
   border-radius: 20px;
   background: #ffffff;
-  box-shadow: 0 32px 64px rgba(31, 42, 68, 0.14);
-  border: none;
+  /* box-shadow: 0 32px 64px rgba(31, 42, 68, 0.14);
+  border: none; */
 }
 
 .core-metrics {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 12px;
 }
 
 @media (min-width: 1200px) {
@@ -461,14 +474,14 @@ const metricsWithMeta = computed(() =>
 
 .core-summary {
   position: relative;
-  flex: 1 1 42%;
+  flex: 1 1 60%;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 36px;
+  padding: 18px 20px;
   border-radius: 24px;
   background: linear-gradient(140deg, rgba(255, 255, 255, 0.96) 0%, rgba(227, 239, 255, 0.96) 54%, rgba(205, 228, 255, 0.96) 100%);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 28px 58px rgba(51, 86, 145, 0.18);
+  /* box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 28px 58px rgba(51, 86, 145, 0.18); */
   overflow: hidden;
 }
 
@@ -487,7 +500,7 @@ const metricsWithMeta = computed(() =>
   flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 28px;
+  gap: 12px;
 }
 
 .core-summary__primary {
@@ -497,7 +510,7 @@ const metricsWithMeta = computed(() =>
 }
 
 .core-summary__value {
-  font-size: 26px;
+  font-size: 20px;
   font-weight: 700;
   color: #1677ff;
   letter-spacing: 1px;
@@ -546,7 +559,7 @@ const metricsWithMeta = computed(() =>
 }
 
 .core-summary__baseline-value {
-  font-size: 26px;
+  font-size: 18px;
   font-weight: 600;
   color: #364260;
 }
@@ -564,7 +577,7 @@ const metricsWithMeta = computed(() =>
 }
 
 .core-summary__visual img {
-  width: 220px;
+  width: 140px;
   height: auto;
 }
 
@@ -579,22 +592,19 @@ const metricsWithMeta = computed(() =>
 }
 
 .core-metrics__grid {
-  flex: 1 1 58%;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
 }
 
 .core-metrics-card {
   position: relative;
-  border-radius: 20px;
-  padding: 16px;
+  border-radius: 16px;
+  padding: 10px;
   background: linear-gradient(150deg, rgba(255, 255, 255, 0.97) 0%, rgba(236, 245, 255, 0.97) 100%);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 24px 48px rgba(31, 42, 68, 0.12);
   display: flex;
-  /* flex-direction: column; */
-  /* gap: 20px; */
-  /* overflow: hidden; */
+  width: 49%;
 }
 
 .core-metrics-card::before {
