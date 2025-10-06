@@ -1,105 +1,134 @@
 <template>
   <div class="simAnalysis-base">
-    <a-row :gutter="[16, 16]">
-        <a-col :xs="24" :xl="9">
-            <a-card title="基础模型参数" headStyle="border-bottom: 0px solid" class="base-info-card">
-                <a-row :gutter="[12, 12]">
-                    <a-col v-for="item in baseParameters" :key="item.label" :span="24" class="base-info-item">
-                        <div class="base-info-item__icon">
-                            <img :src="item.icon" alt="icon" style="width: 46px; height: 46px;" />
-                            <div class="base-info-item__label">{{ item.label }}</div>
-                        </div>
-                        <div class="base-info-item__content">
-                            <div class="base-info-item__value">{{ item.value }}</div>
-                            <div class="base-info-item__unit">{{ item.unit }}</div>
-                        </div>
-                    </a-col>
-                </a-row>
-            </a-card>
-        </a-col>
+    <a-row :gutter="[16, 16]" class="base-row">
+      <a-col :xs="24" :xl="9">
+        <a-card title="基础模型参数" headStyle="border-bottom: 0px solid" class="base-info-card">
+          <a-row :gutter="[12, 12]">
+            <a-col v-for="item in baseParameters" :key="item.label" :span="24" class="base-info-item">
+              <div class="base-info-item__icon">
+                <img :src="item.icon" alt="icon" style="width: 46px; height: 46px;" />
+                <div class="base-info-item__label">{{ item.label }}</div>
+              </div>
+              <div class="base-info-item__content">
+                <div class="base-info-item__value">{{ item.value }}</div>
+                <div class="base-info-item__unit">{{ item.unit }}</div>
+              </div>
+            </a-col>
+          </a-row>
+        </a-card>
+      </a-col>
 
-        <a-col :xs="24" :xl="15">
-            <a-card title="机台参数" headStyle="border-bottom: 0px solid" class="machine-card">
-                <div class="chamber_box">
-                    <div class="chamber">
-                        <a-col v-for="item in chamber.children" :key="item.name" :xs="2" :lg="7">
-                            <div class="chamber__item">
-                                <div>
-                                    <img :src="item.icon" alt="icon" style="width: 60px; height: 60px; margin-right: 6px;" />
-                                </div>
-                                <div>
-                                    <div>
-                                        <span class="chamber__value">{{ item.value }}</span>
-                                        <span class="chamber__unit"> {{ item.unit }}</span>
-                                    </div>
-                                    <div class="chamber__hint">{{ item.hint }}</div>
-                                </div>
-                            </div>
-                        </a-col>
-                        <div class="chamber_name">{{ chamber.name }}</div>
+      <a-col :xs="24" :xl="15">
+        <a-card title="机台参数" headStyle="border-bottom: 0px solid" class="machine-card">
+          <div class="chamber_box">
+            <div class="chamber">
+              <a-col v-for="item in chamber.children" :key="item.hint" :xs="2" :lg="7">
+                <div class="chamber__item">
+                  <div>
+                    <img :src="item.icon" alt="icon" style="width: 60px; height: 60px; margin-right: 6px;" />
+                  </div>
+                  <div>
+                    <div>
+                      <span class="chamber__value">{{ item.value }}</span>
+                      <span class="chamber__unit"> {{ item.unit }}</span>
                     </div>
+                    <div class="chamber__hint">{{ item.hint }}</div>
+                  </div>
                 </div>
-                <a-row :gutter="[12, 12]" style="align-self: end;">
-                    <a-col v-for="item in machineParameters" :key="item.name" :xs="12" :lg="8">
-                        <div class="machine-card__item">
-                            <div class="machine-card__content">
-                                <img :src="item.icon" alt="icon" style="width: 60px; height: 60px; margin-right: 6px;" />
-                                <div>
-                                    <div class="machine-card__num">
-                                        <div class="machine-card__value">{{ item.value }}</div>
-                                        <div class="machine-card__unit">{{ item.unit }}</div>
-                                    </div>
-                                    <div class="machine-card__hint">{{ item.hint }}</div>
-                                </div>
-                            </div>
-                            <div class="machine-card__header">{{ item.name }}</div>
-                        </div>
-                    </a-col>
-                </a-row>
-            </a-card>
-        </a-col>
+              </a-col>
+              <div class="chamber_name">{{ chamber.name }}</div>
+            </div>
+          </div>
+          <a-row :gutter="[12, 12]" style="align-self: end;">
+            <a-col v-for="item in machineParameters" :key="item.name" :xs="12" :lg="8">
+              <div class="machine-card__item">
+                <div class="machine-card__content">
+                  <img :src="item.icon" alt="icon" style="width: 60px; height: 60px; margin-right: 6px;" />
+                  <div>
+                    <div class="machine-card__num">
+                      <div class="machine-card__value">{{ item.value }}</div>
+                      <div class="machine-card__unit">{{ item.unit }}</div>
+                    </div>
+                    <div class="machine-card__hint">{{ item.hint }}</div>
+                  </div>
+                </div>
+                <div class="machine-card__header">{{ item.name }}</div>
+              </div>
+            </a-col>
+          </a-row>
+        </a-card>
+      </a-col>
     </a-row>
 
-    <a-row :gutter="[16, 16]" class="performance-row">
-        <a-col :span="24">
-            <a-card title="核心产能指标" headStyle="border-bottom: 0px solid" class="performance-card">
-                <div class="performance-card__content">
-                    <div class="performance-card__visual">
-                        <div class="performance-card__visual-number">
-                            <div class="performance-card__visual-value">{{ totalThroughput }}</div>
-                            <div class="performance-card__visual-hint">优化后平均值/片</div>
-                        </div>
-                        <div class="performance-card__visual-number">
-                            <div class="performance-card__visual-value">{{ totalBatches }}</div>
-                            <div class="performance-card__visual-hint">原逻辑平均值/片</div>
-                        </div>
-                        <div>
-                            <img :src="jyz" alt="icon" style="width: 240px; height: 240px;" />
-                            <div class="performance-card__visual-title">总处理晶圆数</div>
-                        </div>
-                    </div>
-                    <div class="performance-card__metrics">
-                       <div class="metric-card" v-for="metric in performanceMetrics" :key="metric.label">
-                            <div>
-                                <img :src="metric.icon" alt="icon" style="width: 48px; height: 48px;" />
-                                <div class="metric-card__label">{{ metric.label }}</div>
-                            </div>
-                            <div>
-                                <div class="metric-card__label">{{ metric.optTitle }}</div>
-                                <div class="metric-card__value">{{ metric.optimized }}</div>
-                                <span class="metric-card__trend" :class="metric.trend > 0 ? 'up' : metric.trend < 0 ? 'down' : ''">
-                                    {{ metric.trend > 0 ? `↑ ${metric.trend}%` : metric.trend < 0 ? `↓ ${Math.abs(metric.trend)}%` : '持平' }}
-                                </span>
-                            </div>
-                            <div>
-                                <div class="metric-card__label">{{ metric.baseTitle }}</div>
-                                <div class="metric-card__value">{{ metric.baseline }}</div>
-                            </div>
-                        </div>
-                    </div>
+    <a-row :gutter="[16, 16]">
+      <a-col :span="24">
+        <a-card title="核心产能指标" headStyle="border-bottom: 0px solid" class="performance-card">
+          <div class="core-metrics">
+            <div class="core-summary">
+              <div class="core-summary__stats">
+                <div class="core-summary__primary">
+                  <div class="core-summary__value">{{ totalThroughput }}</div>
+                  <div class="core-summary__meta">
+                    <span class="core-summary__label">优化后平均值/片</span>
+                    <span
+                      v-if="!totalTrendMeta.isFlat"
+                      class="core-summary__trend"
+                      :class="`trend-${totalTrendMeta.direction}`"
+                    >
+                      <span class="core-summary__trend-icon">
+                        {{ totalTrendMeta.direction === 'down' ? '▼' : '▲' }}
+                      </span>
+                      <span>{{ totalTrendMeta.sign }}{{ totalTrendMeta.display }}%</span>
+                    </span>
+                    <span v-else class="core-summary__trend trend-flat">持平</span>
+                  </div>
                 </div>
-            </a-card>
-        </a-col>
+                <div class="core-summary__baseline">
+                  <div class="core-summary__baseline-value">{{ totalBatches }}</div>
+                  <div class="core-summary__baseline-label">原逻辑平均值/片</div>
+                </div>
+              </div>
+              <div class="core-summary__visual">
+                <img :src="jyz" alt="总处理晶圆数" />
+                <div class="core-summary__badge">总处理晶圆数</div>
+              </div>
+            </div>
+
+            <div class="core-metrics__grid">
+              <div class="core-metrics-card" v-for="metric in metricsWithMeta" :key="metric.label">
+                <div class="core-metrics-card__header">
+                  <div class="core-metrics-card__icon">
+                    <img :src="metric.icon" :alt="metric.label" />
+                  </div>
+                  <div class="core-metrics-card__title">{{ metric.label }}</div>
+                </div>
+                <span class="core-metrics-card__divider"></span>
+                <div class="core-metrics-card__body">
+                  <div class="core-metrics-card__column core-metrics-card__column--primary">
+                    <div class="core-metrics-card__caption">{{ metric.optTitle }}</div>
+                    <div class="core-metrics-card__value">
+                        {{ metric.optimized }}
+                        <div class="core-metrics-card__trend" :class="`trend-${metric.trendDirection}`">
+                            <span class="core-metrics-card__trend-icon">
+                            {{ metric.trendDirection === 'down' ? '▼' : '▲' }}
+                            </span>
+                            <span>{{ metric.trendSign }}{{ metric.trendDisplay }}%</span>
+                        </div>
+                    </div>
+
+                  </div>
+                  <div class="core-metrics-card__column core-metrics-card__column--secondary">
+                    <div class="core-metrics-card__caption">{{ metric.baseTitle }}</div>
+                    <div class="core-metrics-card__value core-metrics-card__value--secondary">
+                      {{ metric.baseline }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </a-card>
+      </a-col>
     </a-row>
   </div>
 </template>
@@ -136,65 +165,115 @@ const baseParameters = [
   }
 ];
 
-const chamber = { name: "晶圆盒 (原料端)", children: 
-        [
-            {value: "4", icon: jt, unit: '个', hint: "数量"},
-            {value: "10", icon: jt, unit: '片/盒', hint: "单盒容量"},
-            {value: "10", icon: cs, unit: '分钟/次', hint: "更换耗时"},
-        ] 
-    }
+const chamber = {
+  name: "晶圆仓(原料仓)",
+  children: [
+    { value: "4", icon: jt, unit: "个", hint: "数量" },
+    { value: "10", icon: jt, unit: "片/盒", hint: "单盒容量" },
+    { value: "10", icon: cs, unit: "分钟/次", hint: "更换耗时" }
+  ]
+};
 
 const machineParameters = [
-  { name: "寻边器 (1个)", icon: cs, value: "10", unit: '秒/片', hint: "单次寻边耗时" },
-  { name: "大气机械臂 (双臂)", icon: cs, value: "0.3-0.5", unit: '分钟', hint: "工位间搬运耗时" },
-  { name: "真空过渡腔 (1个)", icon: cs, value: "2", unit: '片', hint: "容量" },
-  { name: "真空机械臂 (双臂)", icon: cs, value: "0.3-0.4", unit: '分钟', hint: "工位间搬运耗时" },
-  { name: "刻蚀腔 (6个)", icon: cs, value: "8-12", unit: '分钟', hint: "单次刻蚀耗时" },
-  { name: "清洗腔 (2个)", icon: cs, value: "3-5", unit: '分钟', hint: "单次清洗耗时" }
+  { name: "寻边机(1台)", icon: cs, value: "10", unit: "分钟/次", hint: "单次寻边耗时" },
+  { name: "大气机械手(双臂)", icon: cs, value: "0.3-0.5", unit: "分钟", hint: "工位间搬运耗时" },
+  { name: "真空过渡仓(1台)", icon: cs, value: "2", unit: "个", hint: "容量" },
+  { name: "真空机械手(双臂)", icon: cs, value: "0.3-0.4", unit: "分钟", hint: "工位间搬运耗时" },
+  { name: "刻蚀腔体(6台)", icon: cs, value: "8-12", unit: "分钟", hint: "单次刻蚀耗时" },
+  { name: "清洗腔体(2台)", icon: cs, value: "3-5", unit: "分钟", hint: "单次清洗耗时" }
 ];
 
 const performanceMetrics = [
   {
     icon: jys,
     label: "日均处理晶圆数",
-    optTitle: '优化后平均值/片',
+    optTitle: "优化后平均值/片",
     optimized: "342.9",
-    baseTitle: '原逻辑平均值/片',
+    baseTitle: "原逻辑平均值/片",
     baseline: "299.1",
-    trend: 14.6
+    trend: 14.6,
+    trendDirection: "up"
   },
   {
     icon: clsc,
     label: "晶圆平均总处理时长",
-    optTitle: '优化后平均值/分钟',
+    optTitle: "优化后平均值/分钟",
     optimized: "19.2",
-    baseTitle: '原逻辑平均值/分钟',
+    baseTitle: "原逻辑平均值/分钟",
     baseline: "22.8",
-    trend: 14.6
+    trend: 15.8,
+    trendDirection: "down"
   },
   {
     icon: ghcs,
     label: "晶圆盒更换总次数",
-    optTitle: '优化后平均值/次',
+    optTitle: "优化后平均值/次",
     optimized: "1029",
-    baseTitle: '原逻辑平均值/次',
+    baseTitle: "原逻辑平均值/次",
     baseline: "898",
-    trend: -15.8
+    trend: 14.6,
+    trendDirection: "up"
   },
   {
     icon: zdsc,
     label: "更换中断时长",
-    optTitle: '优化后平均值/小时',
+    optTitle: "优化后平均值/小时",
     optimized: "171.5",
-    baseTitle: '原逻辑平均值/小时',
+    baseTitle: "原逻辑平均值/小时",
     baseline: "149.7",
-    trend: 14.6
+    trend: 14.6,
+    trendDirection: "up"
   }
 ];
 
 const totalThroughput = computed(() => 10286);
 const totalBatches = computed(() => 972);
 
+const totalTrendValue = 14.6;
+const totalTrendDirection = "up";
+
+const formatTrend = (value) => {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return "--";
+  }
+  const fixed = Math.abs(numeric).toFixed(1);
+  return fixed.endsWith(".0") ? fixed.slice(0, -2) : fixed;
+};
+
+const resolveTrendDirection = (value, explicitDirection) => {
+  if (explicitDirection) {
+    return explicitDirection;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric === 0) {
+    return "flat";
+  }
+  return numeric > 0 ? "up" : "down";
+};
+
+const totalTrendMeta = computed(() => {
+  const direction = resolveTrendDirection(totalTrendValue, totalTrendDirection);
+  return {
+    direction,
+    sign: direction === "down" ? "-" : direction === "up" ? "+" : "",
+    display: formatTrend(totalTrendValue),
+    isFlat: direction === "flat"
+  };
+});
+
+const metricsWithMeta = computed(() =>
+  performanceMetrics.map((metric) => {
+    const direction = resolveTrendDirection(metric.trend, metric.trendDirection);
+    return {
+      ...metric,
+      trendDirection: direction,
+      trendSign: direction === "down" ? "-" : direction === "up" ? "+" : "",
+      trendDisplay: formatTrend(metric.trend),
+      isFlat: direction === "flat"
+    };
+  })
+);
 </script>
 
 <style scoped>
@@ -209,7 +288,11 @@ const totalBatches = computed(() => 972);
 }
 
 .simAnalysis-base :deep(.ant-card-body) {
-    padding: 0 24px 24px 24px;
+  padding: 0 24px 24px 24px;
+}
+
+.base-row {
+    margin-bottom: 16px;
 }
 
 .base-info-card,
@@ -223,62 +306,57 @@ const totalBatches = computed(() => 972);
 }
 
 .chamber_box {
-    width: 200px;
-    height: 288px;
-    background: linear-gradient(to bottom, #ffffff 0%, #ffffff 50%, #E6F3FF 90%, #D0E7FF 100%);
-    padding: 8px;
-    margin-right: 16px;
+  width: 200px;
+  height: 288px;
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 48%, #e6f3ff 88%, #d0e7ff 100%);
+  padding: 8px;
+  margin-right: 16px;
+  border-radius: 12px;
 }
 
 .chamber {
-    display: flex;
-    flex-direction: column;
+  display: flex;
+  flex-direction: column;
 }
 
 .chamber__item {
-    display: flex;
-    width: 200px;
-    margin-bottom: 16px;
+  display: flex;
+  width: 200px;
+  margin-bottom: 16px;
 }
 
 .chamber__value {
-    font-size: 26px;
-    color: #000000;
-    margin-right: 6px;
+  font-size: 26px;
+  color: #112347;
+  margin-right: 6px;
+  font-weight: 600;
 }
 
 .chamber__unit {
-    font-weight: 400;
-    font-size: 12px;
-    color: #999999;
+  font-weight: 400;
+  font-size: 12px;
+  color: #6a7a95;
 }
 
 .chamber__hint {
-    font-weight: 400;
-    font-size: 14px;
-    color: #666666;
+  font-weight: 400;
+  font-size: 14px;
+  color: #6c7a9a;
 }
 
 .chamber_name {
-    font-size: 14px;
-    font-weight: 600;
-    color: #1f2a44;
-    /* background: linear-gradient(to bottom, #E6F3FF 0%, #D0E7FF 100%); */
-    padding: 8px;
-}
-
-.card-extra {
-  font-size: 12px;
-  color: #6c7a9a;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2a44;
+  padding: 8px;
 }
 
 .base-info-item {
   display: flex;
   gap: 12px;
-  border-left: solid 3px #0086FF;
-  /* background: #F3F5F8; */
-  background: linear-gradient(135deg, rgba(22, 119, 255, 0.08) 0%, rgba(255, 255, 255, 0.8) 100%);
-  padding: 8px 0px;
+  border-left: solid 3px #0086ff;
+  background: linear-gradient(135deg, rgba(22, 119, 255, 0.08) 0%, rgba(255, 255, 255, 0.82) 100%);
+  padding: 8px 0;
 }
 
 .base-info-item + .base-info-item {
@@ -290,23 +368,21 @@ const totalBatches = computed(() => 972);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 20px;
-  display: flex;
   flex-direction: column;
   width: 78px;
   height: 66px;
 }
 
 .base-info-item__label {
-  color: #000000;
+  color: #0f1f49;
   font-size: 13px;
   font-weight: 500;
 }
 
 .base-info-item__content {
-    display: flex;
-    justify-content: center;
-    align-items: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
 .base-info-item__value {
@@ -317,26 +393,21 @@ const totalBatches = computed(() => 972);
 }
 
 .base-info-item__unit {
-    color: #1a1a1a91;
-}
-
-.base-info-item__hint {
+  color: rgba(17, 35, 71, 0.56);
   font-size: 12px;
-  color: #8c9bb8;
 }
 
 .machine-card__item {
   border-radius: 12px;
-  /* background: linear-gradient(135deg, rgba(22, 119, 255, 0.08) 0%, rgba(255, 255, 255, 0.8) 100%); */
-  background: linear-gradient(to bottom, #ffffff 0%, #ffffff 50%, #E6F3FF 80%, #D0E7FF 100%);
+  background: linear-gradient(180deg, #ffffff 0%, #ffffff 48%, #e6f3ff 88%, #d0e7ff 100%);
   padding: 14px;
-  min-height: 120px;
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+
 .machine-card__content {
-    display: flex;
+  display: flex;
 }
 
 .machine-card__header {
@@ -346,138 +417,310 @@ const totalBatches = computed(() => 972);
 }
 
 .machine-card__num {
-    display: flex;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 
 .machine-card__value {
-    font-size: 26px;
-    color: #000000;
-    margin-right: 8px;
+  font-size: 26px;
+  color: #0f1f49;
+  font-weight: 600;
 }
 
 .machine-card__unit {
-    display: flex;
-    justify-content: center;
-    align-self: center;
-    font-weight: 400;
-    font-size: 12px;
-    color: #999999;
+  font-size: 12px;
+  color: #6a7a95;
 }
 
 .machine-card__hint {
-    font-weight: 400;
-    font-size: 14px;
-    color: #666666;
+  font-weight: 400;
+  font-size: 14px;
+  color: #6c7a9a;
 }
 
 .performance-card {
-  border-radius: 16px;
-  box-shadow: 0 12px 30px rgba(31, 42, 68, 0.08);
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 32px 64px rgba(31, 42, 68, 0.14);
+  border: none;
 }
 
-.performance-card__content {
+.core-metrics {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
 }
 
-@media (min-width: 992px) {
-  .performance-card__content {
+@media (min-width: 1200px) {
+  .core-metrics {
     flex-direction: row;
+    align-items: stretch;
   }
 }
 
-.performance-card__visual {
-  flex: 1;
-  background: linear-gradient(135deg, rgba(22, 119, 255, 0.1) 0%, rgba(255, 255, 255, 0.9) 100%);
-  border-radius: 16px;
-  padding: 24px;
+.core-summary {
+  position: relative;
+  flex: 1 1 42%;
   display: flex;
-  align-items: flex-start;
+  justify-content: space-between;
+  align-items: center;
+  padding: 36px;
+  border-radius: 24px;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.96) 0%, rgba(227, 239, 255, 0.96) 54%, rgba(205, 228, 255, 0.96) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 28px 58px rgba(51, 86, 145, 0.18);
+  overflow: hidden;
+}
+
+.core-summary::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  pointer-events: none;
+}
+
+.core-summary__stats {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+}
+
+.core-summary__primary {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.core-summary__value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #1677ff;
+  letter-spacing: 1px;
+}
+
+.core-summary__meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.core-summary__label {
+  font-size: 16px;
+  font-weight: 400;
+  color: #45608f;
+}
+
+.core-summary__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.trend-up {
+  color: #ff8a45;
+}
+
+.trend-down {
+  color: #16c784;
+}
+
+.trend-flat {
+  color: #9aa9c6;
+}
+
+.core-summary__trend-icon {
+  font-size: 13px;
+}
+
+.core-summary__baseline {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.core-summary__baseline-value {
+  font-size: 26px;
+  font-weight: 600;
+  color: #364260;
+}
+
+.core-summary__baseline-label {
+  font-size: 16px;
+  color: #6f7e9d;
+}
+
+.core-summary__visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
 }
 
-.performance-card__visual-number {
+.core-summary__visual img {
+  width: 220px;
+  height: auto;
+}
+
+.core-summary__badge {
+  padding: 8px 20px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2b79ff 0%, #5aa6ff 100%);
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 600;
+  box-shadow: 0 12px 24px rgba(43, 121, 255, 0.32);
+}
+
+.core-metrics__grid {
+  flex: 1 1 58%;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 20px;
+}
+
+.core-metrics-card {
+  position: relative;
+  border-radius: 20px;
+  padding: 16px;
+  background: linear-gradient(150deg, rgba(255, 255, 255, 0.97) 0%, rgba(236, 245, 255, 0.97) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 24px 48px rgba(31, 42, 68, 0.12);
+  display: flex;
+  /* flex-direction: column; */
+  /* gap: 20px; */
+  /* overflow: hidden; */
+}
+
+.core-metrics-card::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+
+.core-metrics-card__header {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  width: 126px;
+}
+
+.core-metrics-card__icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(43, 121, 255, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.core-metrics-card__icon img {
+  width: 32px;
+  height: 32px;
+}
+
+.core-metrics-card__title {
+    font-weight: 400;
+    font-size: 14px;
+    color: #1A1A1A;
+}
+
+.core-metrics-card__body {
+  position: relative;
+  display: flex;
+  gap: 18px;
+  margin: 16px 0px;
+}
+
+.core-metrics-card__column {
+  flex: 1;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  text-align: left;
 }
 
-.performance-card__visual-title {
-  color: #4a5775;
-}
-
-.performance-card__visual-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1677ff;
-}
-
-.performance-card__visual-hint {
-  font-size: 13px;
-  color: #6c7a9a;
-}
-
-.performance-card__metrics {
-  flex: 2;
-}
-
-.metric-card {
-  border-radius: 12px;
-  background: #f8fbff;
-  padding: 16px;
-  min-height: 130px;
-  display: flex;
-  gap: 8px;
-  box-shadow: inset 0 0 0 1px rgba(22, 119, 255, 0.06);
-}
-
-.metric-card__label {
-  font-size: 13px;
-  color: #4a5775;
-}
-
-.metric-card__value {
-  font-size: 20px;
+.core-metrics-card__column--primary .core-metrics-card__value {
+  font-size: 16px;
+  color: #000000;
   font-weight: 600;
-  color: #1f2a44;
-}
-
-.metric-card__sub {
   display: flex;
-  justify-content: space-between;
+  gap: 4px;
+}
+
+.core-metrics-card__column--secondary .core-metrics-card__value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #7a88a8;
+  gap: 4px;
+}
+
+.core-metrics-card__caption {
   font-size: 12px;
-  color: #6c7a9a;
+  color: #7a88a8;
+  margin: 8px 0px;
 }
 
-.metric-card__trend.up {
-  color: #16a085;
+.core-metrics-card__trend {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-.metric-card__trend.down {
-  color: #ff4d4f;
+.core-metrics-card__trend-icon {
+  font-size: 12px;
 }
 
-.panel-module-list :deep(.ant-list-item) {
-  padding: 12px 16px;
+.core-metrics-card__value--secondary {
+  color: #6f7e9d;
 }
 
-.panel-module-item span:first-child {
-  color: #1f2a44;
+.core-metrics-card__divider {
+  width: 1px;
+  background: linear-gradient(180deg, rgba(138, 164, 214, 0) 0%, rgba(138, 164, 214, 0.5) 50%, rgba(138, 164, 214, 0) 100%);
+  margin: 16px;
 }
 
-.panel-module-link {
-  color: #1677ff;
-}
-
-@media (max-width: 1024px) {
-  .simAnalysis-container {
+@media (max-width: 1199px) {
+  .core-summary {
     flex-direction: column;
+    text-align: center;
+    padding: 28px 24px 36px;
   }
 
-  .analysis-left {
-    width: 100%;
+  .core-summary__stats {
+    align-items: center;
+  }
+
+  .core-summary__baseline {
+    align-items: center;
+  }
+
+  .core-summary__visual {
+    margin-top: 24px;
+  }
+
+  .core-metrics__grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  }
+}
+
+@media (max-width: 768px) {
+  .core-metrics__grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

@@ -56,7 +56,10 @@
         </a-col>
       </a-row>
 
-      <BaseInfo />
+      <BaseInfo v-if="menu === 'baseInfo'" />
+      <Throughput v-if="menu === 'overview2'" />
+      <DeviceUtilization v-if="menu === 'overview3'" />
+      <WaitingTime v-if="menu === 'overview4'" />
     </section>
   </div>
 </template>
@@ -65,6 +68,9 @@
 import { h, reactive, ref } from "vue";
 import { FormOutlined, DeleteOutlined } from "@ant-design/icons-vue";
 import BaseInfo from "./components/BaseInfo.vue";
+import DeviceUtilization from './components/DeviceUtilization.vue';
+import Throughput from "./components/Throughput.vue";
+import WaitingTime from "./components/WaitingTime.vue";
 import tj from "@/assets/images/analysis/1.png";
 import jcxx from "@/assets/images/analysis/2.png";
 import xnzb from "@/assets/images/analysis/3.png";
