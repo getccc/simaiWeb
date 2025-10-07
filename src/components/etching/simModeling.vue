@@ -1,15 +1,15 @@
 ﻿<template>
   <div class="simModeling-container">
     <div ref="container" class="simModeling-map"></div>
-    <aside class="simModeling-panel">
+    <aside v-if="etchStore.drawerVisible" class="simModeling-panel">
       <a-tabs v-model:activeKey="activeTab" type="card" size="small" class="panel-tabs">
         <a-tab-pane key="system" tab="系统配置">
           <div style="margin-top: 16px;" class="panel-stack">
             <div class="panel-card__block">
-              <a-button style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">创建</a-button>
+              <a-button @click="addData" style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">创建</a-button>
             </div>
             <div class="panel-card__tags">
-              <a-tag v-for="opt in experimentOptions" closable @close.prevent>{{ opt.label }}</a-tag>
+              <a-tag v-for="opt in experimentOptions" @close="delData(opt.value)" closable>{{ opt.label }}</a-tag>
             </div>
             <FormNumberField
               label="到达间隔"
@@ -266,7 +266,7 @@
                     unit="秒"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="120"
                   />
                   <FormRangeField
                     label="B腔室"
@@ -274,7 +274,7 @@
                     unit="秒"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="120"
                   />
                   <FormRangeField
                     label="C腔室"
@@ -282,7 +282,7 @@
                     unit="秒"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="120"
                   />
                   <FormRangeField
                     label="D腔室"
@@ -290,7 +290,7 @@
                     unit="秒"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="120"
                   />
                   <FormRangeField
                     label="E腔室"
@@ -298,7 +298,7 @@
                     unit="秒"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="120"
                   />
                   <FormRangeField
                     label="F腔室"
@@ -306,7 +306,7 @@
                     unit="秒"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="120"
                   />
 
                   <div class="card-header">真空参数</div>
@@ -336,7 +336,7 @@
                     unit="W"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="1000"
                   />
                   <FormNumberField
                     label="频率"
@@ -350,7 +350,7 @@
                     unit="W"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="1000"
                   />
 
                   <div class="card-header">气体参数</div>
@@ -382,7 +382,7 @@
                     unit="℃"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="300"
                   />
                   <FormRangeField
                     label="腔室壁温"
@@ -390,7 +390,7 @@
                     unit="℃"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="300"
                   />
                 </a-space>
               </a-collapse-panel>
@@ -419,15 +419,15 @@
                     unit="W"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="1000"
                   />
                   <FormRangeField
                     label="气体流量"
                     v-model="parameterState.cleaningGasFlowRange"
-                    unit="sccm"
+                    unit="sc"
                     :min="0"
                     :slider-min="1"
-                    :slider-max="30"
+                    :slider-max="1000"
                   />
 
                   <div class="card-header">清洗方式</div>
@@ -496,11 +496,19 @@ import arm1 from "@/assets/images/map/arm1.png";
 import arm2 from "@/assets/images/map/arm2.png";
 import edge from "@/assets/images/map/edge.png";
 import chamber from "@/assets/images/map/chamber.png";
+import { message } from 'ant-design-vue';
+import { createParameter, getParameter, getParameterById, delParameterById } from '@/api/etching/parameter';
+import { Etch } from '@/stores/etch';
 
+const etchStore = Etch()
 const emit = defineEmits(["regionClick", "mapClick"]);
 
 const container = ref(null);
 const mapInstance = ref(null);
+const experimentOptions = ref([]);
+const parameterCollapseKeys = ref([]);
+const clickedCom = ref(null);
+
 const overlays = [];
 let pointerMoveListenerKey = null;
 let lastHoveredFeature = null;
@@ -524,14 +532,9 @@ const MIN_ZOOM = -1;
 const EXTENT_EXPANSION_RATIO = 1;
 
 const activeTab = ref("system");
-
-const experimentOptions = [
-  { label: "实验室1", value: "lab-1" },
-  { label: "实验室2", value: "lab-2" }
-];
+const systemCollapseKeys = ref(['strategy', 'capacity', 'alerts']);
 
 const systemState = reactive({
-  activeExperiment: experimentOptions[0].value,
   arrivalInterval: 10,
   simulationTime: 10000,
   armStrategy: "distance",
@@ -540,8 +543,6 @@ const systemState = reactive({
   timeoutThreshold: 10,
   particleAlertThreshold: 5
 });
-
-const systemCollapseKeys = ref(['strategy', 'capacity', 'alerts']);
 
 const parameterState = reactive({
   waferCassetteCount: 4,
@@ -579,7 +580,7 @@ const parameterState = reactive({
   gasMixRatio: 50,
   waferChuckTemperatureRange: [180, 220],
   chamberWallTemperatureRange: [120, 150],
-  cleaningChamberCount: 1,
+  cleaningChamberCount: 2,
   cleaningTimeRange: [20, 25],
   cleaningPowerRange: [500, 600],
   cleaningGasFlowRange: [50, 80],
@@ -587,9 +588,6 @@ const parameterState = reactive({
   dryingTimeRange: [15, 20],
   dryingGasPressureRange: [1, 2]
 });
-
-const parameterCollapseKeys = ref([]);
-const clickedCom = ref(null);
 
 const comPos = [
   {
@@ -752,8 +750,10 @@ const handlePointerMove = (event) => {
 };
 
 const handleComOVerlay = (id, opacity) => {
+  const com1 = comPos.find(t => t.id === id);
+  const com2 = comPos.find(t => t.id === clickedCom.value);
   comPos.forEach(item => {
-    const value = item.id === clickedCom.value ? 1 : (id === item.id ? opacity : 0);
+    const value = item.key === com2?.key ? 1 : (com1?.key === item.key ? opacity : 0);
     if (item.bgOverlay) {
       item.bgOverlay.forEach(overlay => {
         const bgImg = overlay.element.querySelectorAll('img')[0];
@@ -782,7 +782,7 @@ const initializeMap = async () => {
       center: getCenter(extent),
       zoom: 2,
       minZoom: MIN_ZOOM,
-      maxZoom: 8,
+      maxZoom: 3,
       extent: expandedExtent
     });
 
@@ -943,8 +943,63 @@ const addImageOverlay = ({ src, coordinate, size, opacity, positioning = "center
   return overlay;
 };
 
+// ----------------------------------------------- 接口调用 -----------------------------------------
+const getData = async () => {
+  const data = await getParameter('etching', 1);
+  experimentOptions.value = data.map(t => { return { label: t.name, value: t.id } })
+  console.log(experimentOptions.value)
+}
+
+const addData = async () => {
+  const param = {
+    template_id: 1,
+    domain_key: "etching",
+    name: `实验室${experimentOptions.value.length+1}`,
+    description: "蚀刻机参数集",
+    tags: ["etching"],
+    values: {
+      "cassette.count": parameterState.waferCassetteCount,
+      "cassette.capacity": parameterState.waferCassetteCapacity,
+      "cassette.change_time": systemState.arrivalInterval,
+      "atmo_robot.count": parameterState.atmosphereArmCount,
+      "atmo_robot.transfer_time": parameterState.atmosphereTransferTimeRange,
+      "vac_robot.count": parameterState.vacuumArmCount,
+      "vac_robot.transfer_time": parameterState.vacuumTransferTimeRange,
+      "load_lock.vacuum_time": parameterState.loadLockPumpDownTimeRange,
+      "load_lock.vent_time": parameterState.loadLockVentTimeRange,
+      "edge_detector.align_time": parameterState.edgeSeekTimeRange,
+      "edge_detector.calibration_time": parameterState.edgeCalibrationTimeRange,
+      "edge_detector.max_batch": parameterState.edgeContinuousRunCount,
+      "etch.count": parameterState.etchChamberCount,
+      "etch.time_A": parameterState.etchChamberATimeRange,
+      "etch.time_B": parameterState.etchChamberBTimeRange,
+      "etch.time_C": parameterState.etchChamberCTimeRange,
+      "etch.time_D": parameterState.etchChamberDTimeRange,
+      "etch.time_E": parameterState.etchChamberETimeRange,
+      "etch.time_F": parameterState.etchChamberFTimeRange,
+      "clean.count": parameterState.cleaningChamberCount,
+      "clean.time": parameterState.cleaningTimeRange,
+      "clean.dry_time": parameterState.dryingTimeRange,
+      "simulation.duration": systemState.simulationTime,
+      "wafer.arrival_interval": [0, systemState.arrivalInterval]
+    }
+  }
+  const res = await createParameter(param)
+  if (res) {
+    getData();
+    message.success('保存成功！')
+  }
+}
+
+const delData = async (id) => {
+  await delParameterById(id);
+  // getData();
+  message.success('删除成功！')
+}
+
 onMounted(async () => {
   await initializeMap();
+  getData()
   
   comPos.forEach(item => {
     drawRegionOnBasemap({

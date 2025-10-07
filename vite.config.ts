@@ -18,7 +18,7 @@ export default defineConfig({
       "/api": {
         target: "http://0.0.0.0:8000/",
         changeOrigin: true, // 修改请求头中的源
-        rewrite: (path) => path.replace(/^\/api/, ""), // 可选的路径重写
+        rewrite: (path) => path.replace(/^\/api/, "api"), // 可选的路径重写
       },
     },
   },

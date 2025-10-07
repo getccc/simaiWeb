@@ -2,6 +2,7 @@
 import { ref, defineProps } from "vue";
 import { Avatar, Dropdown, message } from "ant-design-vue";
 import {
+  LayoutFilled,
   BookFilled,
   UserOutlined,
   TranslationOutlined,
@@ -13,6 +14,9 @@ import {
 import { Login } from "@/stores/user";
 import { login } from "@/api/login";
 import { useRouter, useRoute } from "vue-router";
+import { Etch } from '@/stores/etch';
+
+const etchStore = Etch()
 
 defineProps<{
   name: string;
@@ -51,10 +55,15 @@ const logOut = () => {
   //   location.reload();
   message.success("退出成功");
 };
+
+const handleDrawer = () => {
+  etchStore.saveDrawerVisible(!etchStore.drawerVisible)
+}
 </script>
 
 <template>
   <div class="nav_right">
+    <LayoutFilled @click="handleDrawer" class="label_icon" />
     <BookFilled class="label_icon" />
     <!-- <BookFilled class="label_icon" @click="()=>simulateLogin()" /> -->
     <Dropdown trigger="click" :open="visible" @update:open="visible = $event">

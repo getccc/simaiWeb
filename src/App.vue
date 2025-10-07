@@ -59,6 +59,8 @@ const goHome:any = () => {
 
 watch(() => route.name, (newVal) => {
   currentRoute.value = newVal;
+  const simName = newVal === 'workflowdetail' ? 'etch' : '';
+  store.saveSimName(simName)
 });
 
 </script>
