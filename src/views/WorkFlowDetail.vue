@@ -1,22 +1,43 @@
 <template>
   <div class="page_box">
     <div class="cont_box">
-      <simModeling v-if="store.menuName === 'simModeling'" />
-      <simAnalysis v-if="store.menuName === 'simAnalysis'" />
+      <simModeling :param_key="param_key" v-if="store.menuName === 'simModeling'" />
+      <simAnalysis @updateParam="updateParam" v-if="store.menuName === 'simAnalysis'" />
       <threeDSim   v-if="store.menuName === '3DSim'" />
     </div>
+    <SimChat v-if="showAgent && store.menuName !== 'simAnalysis'" />
+    <img v-if="store.menuName !== 'simAnalysis'" @click="handleAgentClick" :src="agent" :class="[showAgent ? 'sim-agent-selected' : 'sim-agent']" />
   </div>
 </template>
 <script setup lang="ts">
-import { ref, type UnwrapRef, reactive, toRaw, onMounted } from "vue";
-import { useRouter, useRoute } from "vue-router";
+import { ref, onMounted, watch } from "vue";
 import simModeling from "@/components/etching/simModeling.vue";
 import simAnalysis from "@/components/etching/simAnalysis.vue";
 import threeDSim from "@/components/etching/threeDSim.vue";
 import { Etch } from '@/stores/etch';
+import agent from '@/assets/images/map/agent.png';
+import SimChat from '@/components/SimChat/index.vue';
 
-const route = useRoute();
 const store = Etch()
+const param_key = ref(null);
+const showAgent = ref(false);
+
+const updateParam = (paramId: any) => {
+  store.saveMenuName('simModeling');
+  param_key.value = paramId;
+}
+
+const handleAgentClick = () => {
+  showAgent.value = !showAgent.value
+
+}
+
+watch(() => store.menuName, (newVal) => {
+    if (newVal !== 'simModeling') {
+      param_key.value = null;
+    }
+  }
+);
 
 onMounted(() => {
 });
@@ -32,6 +53,24 @@ onMounted(() => {
   flex: 1;
   overflow-y: auto;
 }
+.sim-agent {
+  width: 50px;
+  height: 50px;
+  position: absolute;
+  left: 50px;
+  bottom: 50px;
+  cursor: pointer;
+}
+
+.sim-agent-selected {
+  width: 50px;
+  height: 50px;
+  position: absolute;
+  left: 420px;
+  top: 90px;
+  cursor: pointer;
+}
+
 .header_view {
   height: 2.57rem;
   display: flex;

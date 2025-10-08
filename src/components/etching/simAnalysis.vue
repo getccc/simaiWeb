@@ -22,15 +22,15 @@
               {{ simulator.name }}
             </div> 
             <div class="simulator-value">
-              {{ simulator.total }}
-              <FormOutlined :style="{fontSize: '15px'}" />
-              <DeleteOutlined :style="{fontSize: '15px'}" />
+              {{ simulator.total }}M
+              <FormOutlined @click="handleUpdate(simulator)" :style="{fontSize: '15px'}" />
+              <DeleteOutlined @click="handleDelete(simulator)" :style="{fontSize: '15px'}" />
             </div>
           </div>
           <div class="simulator-item__body">
             <div class="simulator-metric">
-               <div>{{ simulator.total }}</div>
-                <div>{{ simulator.used }}({{ simulator.progress }}%)</div>
+               <div>{{ simulator.total }}M</div>
+                <div>{{ simulator.used }}M({{ simulator.progress }}%)</div>
             </div>
             <div>
               <a-progress :percent="simulator.progress" :show-info="false" size="small" />
@@ -65,7 +65,7 @@
 </template>
 
 <script setup>
-import { h, reactive, ref } from "vue";
+import { h, onMounted, ref, defineEmits } from "vue";
 import { FormOutlined, DeleteOutlined } from "@ant-design/icons-vue";
 import BaseInfo from "./components/BaseInfo.vue";
 import DeviceUtilization from './components/DeviceUtilization.vue';
@@ -76,7 +76,12 @@ import jcxx from "@/assets/images/analysis/2.png";
 import xnzb from "@/assets/images/analysis/3.png";
 import sbzb from "@/assets/images/analysis/4.png";
 import jysj from "@/assets/images/analysis/5.png";
+import { message } from 'ant-design-vue';
+import { getLatestByParameterSetId } from '@/utils/utils';
+import { getParameter, delParameterById } from '@/api/etching/parameter';
+import { createRuns, getRuns, getRunsById, cancelRunsById } from '@/api/etching/runs';
 
+const emit = defineEmits(['updateParam'])
 const menu = ref("baseInfo");
 const example = ref(1);
 const overviewCards = [
@@ -109,50 +114,47 @@ const overviewCards = [
     gradient: "linear-gradient(135deg, #e0f3ff 0%, #ffffff 100%)"
   }
 ];
+const simulators = ref([]);
 
-const simulators = reactive([
-  {
-    id: 1,
-    name: "实验室1",
-    total: "645M",
-    used: "426.8M",
-    assigned: "339.1M",
-    progress: 78
-  },
-  {
-    id: 2,
-    name: "实验室2",
-    total: "426.8M",
-    used: "426.8M",
-    assigned: "426.8M (100%)",
-    progress: 100
-  },
-  {
-    id: 3,
-    name: "实验室3",
-    total: "426.8M",
-    used: "426.8M",
-    assigned: "226.3M (45%)",
-    progress: 45
-  },
-  {
-    id: 4,
-    name: "实验室4",
-    total: "645M",
-    used: "426.8M",
-    assigned: "339.1M (78%)",
-    progress: 78
-  },
-  {
-    id: 5,
-    name: "实验室5",
-    total: "645M",
-    used: "426.8M",
-    assigned: "339.1M (78%)",
-    progress: 78
-  }
-]);
+// ----------------------------------------------- 接口调用 -------------------------------------------------------
+const getData = async () => {
+  const data = await getParameter();
+  const run = await getRuns()
+  const items = getLatestByParameterSetId(run.items);
+  let arr = [];
+  data.forEach(t => {
+    const obj = items.find(v => v.parameter_set_id === t.id);
+    if(obj) {
+      arr.push(obj);
+    }
+  })
+  simulators.value = arr.map(t => {
+    return { 
+      id: t.id, 
+      parameter_set_id: t.parameter_set_id,
+      name: t.name, 
+      total: t.event_count, 
+      used: t.event_count * t.progress, 
+      assigned: t.event_count, 
+      progress: t.progress * 100  
+    } 
+  })
+}
 
+const handleUpdate = (value) => {
+  console.log(value)
+  emit('updateParam', value.parameter_set_id)
+}
+
+const handleDelete = async (value) => {
+  await delParameterById(value.parameter_set_id);
+  getData();
+  message.success('删除成功！')
+}
+
+onMounted(async () => {
+  getData()
+});
 
 
 </script>

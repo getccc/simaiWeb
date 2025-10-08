@@ -15,14 +15,15 @@
 
         <div class="panel-controls">
           <div class="panel-controls-left">
-            <CaretRightOutlined @click="handleSimStart" />
-            <PauseOutlined @click="handleSimStop" />
+            <CaretRightOutlined v-if="!helpersParams.isAnimation" @click="handleSimStart" />
+            <PauseOutlined v-else @click="handleSimStop" />
+            <StopOutlined @click="resetEventLog" />
           </div>
           <a-select
-            v-model:value="selectedScene"
+            v-model:value="selectedSim"
             :options="simOptions"
             size="small"
-            style="min-width: 120px"
+            style="min-width: 150px"
           />
         </div>
         <div class="panel-table">
@@ -31,7 +32,7 @@
             :columns="eventColumns"
             :data-source="eventRows"
             :pagination="false"
-            :scroll="{ y: 260 }"
+            :scroll="{ y: `calc(100vh - 220px)` }"
             row-key="key"
           >
             <template #bodyCell="{ column, record }">
@@ -68,11 +69,11 @@
               </div>
               <div class="stat-item">
                 <span class="stat-label">运行:</span>
-                <span class="stat-value">{{ runDurationDisplay }}</span>
+                <span class="stat-value">{{ formatNumber(eventSummary.totalSimTime, 0) }}秒</span>
               </div>
               <div class="stat-item">
                 <a-progress type="circle" :percent="progressPercent" :size="20" />
-                <span class="stat-value">{{ statusLabel }}</span>
+                <span class="stat-value">{{ progressPercent }}%</span>
               </div>
             </div>
           </div>
@@ -82,17 +83,16 @@
 
     <div v-if="helpersParams.isAnimation" class="timeline-panel">
       <div class="timeline-controls">
-        <!-- <a-button size="small" type="primary" @click="onPlay" :disabled="timelineState.isPlaying">播放</a-button>
-        <a-button size="small" @click="onPause" :disabled="!timelineState.isPlaying">暂停</a-button>
-        <a-button size="small" @click="onRestart">重置</a-button> -->
-        <CaretRightOutlined @click="onPlay" :disabled="timelineState.isPlaying" />
-        <PauseOutlined @click="onPause" :disabled="!timelineState.isPlaying" />
-        <PlusCircleOutlined />
+        <CaretRightOutlined @click="onPlay" v-if="!timelineState.isPlaying" />
+        <PauseOutlined @click="onPause" v-else />
+        <StopOutlined @click="onRestart"/>
+
+        <PlusCircleOutlined @click="timelineState.speed += 1" />
         <div class="speed-control">
           <a-input-number addon-before="x" v-model:value="timelineState.speed" :min="0.1" :max="10" :step="0.1" @change="onSpeedChange" />
         </div>
-        <MinusCircleOutlined />
-        <ForwardOutlined />
+        <MinusCircleOutlined @click="timelineState.speed -= 1" />
+        <ForwardOutlined @click="onScrub(timelineState.current + 10)" />
       </div>
       <div class="timeline-slider">
         <a-slider :min="0" :max="Math.max(0.001, timelineState.duration)" :step="0.001" v-model:value="timelineState.current" @change="onScrub" />
@@ -100,6 +100,7 @@
       <a-select
         v-model:value="selectedScene"
         :options="sceneOptions"
+        @change="handleSceneChange"
         size="small"
         style="min-width: 120px"
       />
@@ -109,14 +110,18 @@
 
 <script setup>
 import { onMounted, onBeforeUnmount, ref, reactive, nextTick, computed } from "vue";
-import { CaretRightOutlined, PauseOutlined, PlusCircleOutlined, MinusCircleOutlined, ForwardOutlined } from "@ant-design/icons-vue";
+import { CaretRightOutlined, PauseOutlined, PlusCircleOutlined, MinusCircleOutlined, ForwardOutlined, StopOutlined } from "@ant-design/icons-vue";
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
 import { GLTFLoader } from "three-stdlib";
 import { gsap } from "gsap";
-import { start, status, events } from "@/api/sim";
+import { getLatestByParameterSetId } from '@/utils/utils';
+import { getParameter } from '@/api/etching/parameter';
+import { createRuns, getRuns, getRunsById, cancelRunsById } from '@/api/etching/runs';
 
 const container = ref(null);
+const simOptions = ref([]);
+const selectedSim = ref(null);
 
 let renderer, scene, camera, controls, target;
 let model = null;
@@ -126,68 +131,6 @@ let m2Ref = null;
 let timeLine = null;
 let timer = null;
 let logTypingTimer = null;
-
-const sceneOptions = [
-  { label: '全景视图', value: 'lab-1' },
-  { label: '透明视图', value: 'lab-2' },
-  { label: '内景视图', value: 'lab-3' },
-];
-
-const simOptions = [
-  { label: '实验室一', value: 'lab-1' },
-  { label: '实验室二', value: 'lab-2' },
-  { label: '实验室三', value: 'lab-3' },
-];
-const selectedScene = ref(simOptions[0].value);
-
-const eventColumns = [
-  { title: '', dataIndex: 'index', key: 'index', width: 52, align: 'center' },
-  { title: 'xx事件预订通过：', dataIndex: 'label', key: 'label', ellipsis: true },
-  { title: '剩余时间', dataIndex: 'durationDisplay', key: 'durationDisplay', width: 110, align: 'right' },
-];
-
-const eventRows = ref([
-  { index: 0, label: 'root.preLaminationLi ', durationDisplay: '1'}
-]);
-const eventSummary = reactive({
-  totalSimTime: 555.5,
-  eventCount: 5,
-  avgDuration: 1,
-  throughput: 0,
-  runDuration: 2,
-  lastUpdate: '2025/01/01 00:00:00',
-  progress: 10,
-});
-
-const eventKeySet = new Set();
-
-const simOperationState = reactive({ starting: false });
-
-const totalSimTimeDisplay = computed(() => `${formatNumber(eventSummary.totalSimTime)} 秒`);
-const avgDurationDisplay = computed(() => {
-  if (!eventSummary.eventCount) return '--';
-  return `${formatNumber(eventSummary.avgDuration)} 秒`;
-});
-const throughputDisplay = computed(() => {
-  if (!eventSummary.eventCount) return '--';
-  return `${formatNumber(eventSummary.throughput)} /秒`;
-});
-const runDurationDisplay = computed(() => {
-  if (!eventSummary.runDuration) return '--';
-  return `${formatNumber(eventSummary.runDuration)} 秒`;
-});
-const lastUpdateDisplay = computed(() => eventSummary.lastUpdate || '--');
-const statusLabel = computed(() => {
-  return helpersParams.isStart ? '准备中' : '10%';
-});
-const statusColor = computed(() => {
-  const status = helpersParams.simStatus;
-  if (status === 'finished') return 'success';
-  if (status === 'running') return 'processing';
-  if (status === 'error' || status === 'failed') return 'error';
-  return 'default';
-});
-const progressPercent = computed(() => Math.max(0, Math.min(100, Math.round(eventSummary.progress))));
 
 // 时间线与播放状态
 const timelineState = reactive({
@@ -210,53 +153,63 @@ const helpersParams = reactive({
   arm2: '',
   isStart: false,
   simStatus: '',
-  isAnimation: true,
+  isAnimation: false,
   simLog: ''
 });
 
 // 日志容器引用与增量状态
 const eventState = reactive({ sinceId: 0 });
 
+const sceneOptions = [
+  { label: '全景视图', value: 1 },
+  { label: '透明视图', value: 2 },
+  { label: '内景视图', value: 3 },
+];
+const selectedScene = ref(1);
+
+const eventSummary = reactive({
+  totalSimTime: 0,
+  eventCount: 0,
+  avgDuration: 1,
+  throughput: 0,
+  runDuration: 2,
+  lastUpdate: '',
+  progress: 0
+});
+
+const eventColumns = [
+  { title: '', dataIndex: 'index', key: 'index', width: 52, align: 'center' },
+  { title: '事件预订通过:', dataIndex: 'label', key: 'label', ellipsis: true },
+  { title: '剩余时间', dataIndex: 'durationDisplay', key: 'durationDisplay', width: 110, align: 'right' },
+];
+
+const eventRows = ref([]);
+
+const simOperationState = reactive({ starting: false });
+
+const totalSimTimeDisplay = computed(() => `${formatNumber(eventSummary.totalSimTime)} 秒`);
+const avgDurationDisplay = computed(() => {
+  if (!eventSummary.eventCount) return '--';
+  return `${formatNumber(eventSummary.avgDuration, 0)} 秒`;
+});
+const throughputDisplay = computed(() => {
+  if (!eventSummary.eventCount) return '--';
+  return `${formatNumber(eventSummary.throughput, 0)}`;
+});
+const lastUpdateDisplay = computed(() => eventSummary.lastUpdate || '--');
+const progressPercent = computed(() => Math.max(0, Math.min(100, Math.round(eventSummary.progress))));
+
 // 仿真配置
 const simConfig = reactive({
-  simId: 0,
-  cassettes: {
-    count: 4,
-    layers: 1000
-  },
-  wafer_aligner: {
-    align_time: [1.0, 2.0]
-  },
-  load_lock: {
-    pump_down_time: [2.0, 3.0],
-    vent_time: [1.5, 2.5]
-  },
-  robot_systems: {
-    atmospheric_arm_count: 2,
-    vacuum_arm_count: 2,
-    atmospheric_transfer_time: [0.5, 1.0],
-    vacuum_transfer_time: [0.3, 0.8]
-  },
-  etching_chambers: {
-    count: 6,
-    etch_time: [5.0, 8.0]
-  },
-  cleaning_chambers: {
-    count: 2,
-    clean_time: [3.0, 5.0]
-  },
-  wafer_arrival: {
-    interval_range: [2.0, 4.0]
-  },
-  simulation_time: 1000
+  simId: 0
 });
 
 const presetTargets = {
-  A0: new THREE.Vector3(160, 52, 90),
-  A1: new THREE.Vector3(160, 52, 90),
-  A2: new THREE.Vector3(160, 52, 40),
-  A3: new THREE.Vector3(160, 52, -10),
-  A4: new THREE.Vector3(160, 52, -60),
+  A0: new THREE.Vector3(150, 52, 90),
+  A1: new THREE.Vector3(150, 52, 90),
+  A2: new THREE.Vector3(150, 52, 40),
+  A3: new THREE.Vector3(150, 52, -10),
+  A4: new THREE.Vector3(150, 52, -60),
   E0: new THREE.Vector3(0, 0, 0),
   E1: new THREE.Vector3(0, -Math.PI*0.6, 0),
   E2: new THREE.Vector3(0, -Math.PI*0.9, 0),
@@ -268,13 +221,29 @@ const presetTargets = {
   F2: new THREE.Vector3(0, -0.2, 0),
 }
 
-let modelArr = ['Group012', 'Group015', 'Group018', '组003', '组004', 'a', 'b', 'c', 'ICP34', 'ICP363'];
+let modelArr = ['Group012', 'Group015', 'Group018', '组003', '组004', '组022', '组007', '组025', 'a', 'b', 'c', 'ICP34', 'ICP363'];
+
+// ----------------------------------------------- 接口调用 -------------------------------------------------------
+const getData = async () => {
+  const data = await getParameter();
+  const run = await getRuns()
+  const items = getLatestByParameterSetId(run.items);
+  let arr = [];
+  data.forEach(t => {
+    const obj = items.find(v => v.parameter_set_id === t.id);
+    if(obj) {
+      arr.push(obj);
+    }
+  })
+  simOptions.value = arr.map(t => { return { label: t.name, value: t.id } })
+}
 
 onMounted(async () => {
   init();
   await loadModel('/model/AMEC10/AMEC.gltf')
   initializeControls()
   animate();
+  getData()
 });
 
 function init() {
@@ -413,12 +382,8 @@ function onPointerClick(event) {
 
 function initializeControls() {
   timeLine = gsap.timeline()
-  
   const m2 = scene.getObjectByName('jixiebi2');
   m2Ref = m2
-
-  // const zhaozi = scene.getObjectByName('zhaozi001');
-  // if (zhaozi) setObjectTransparency(zhaozi, true, 0.5)
 }
 
 // 记录材质原始状态（属性级），可用于无需克隆的场景
@@ -521,6 +486,23 @@ function setObjectTransparency(object3D, enable, opacity = 0.25, tint) {
   })
 }
 
+function handleSceneChange(val) {
+   switch (val) {
+      case 1:
+        onVisibilityChange(true)
+        onTransparentChange(false)
+        break
+      case 2:
+        onVisibilityChange(true)
+        onTransparentChange(true)
+        break
+      case 3:
+        onVisibilityChange(false)
+        break
+      default:
+        break
+    }
+}
 // 透明
 function onTransparentChange(transparent) {
   const targetOpacity = 0.25 // 可按需调整默认半透明强度
@@ -562,7 +544,7 @@ function onWorkChange(key, { duration = 1, absolutetime = null }) {
 function onFixedClick({ duration = 1, absolutetime = null }) {
   const m3 = scene.getObjectByName('ICP375');
   const dur = duration * 0.8
-  moveM2To(new THREE.Vector3(147.72, 52, 90), dur, absolutetime)
+  moveM2To(new THREE.Vector3(150, 52, 90), dur, absolutetime)
   if (m3) {
     gsapRotation(timeLine, m3, { x: 0, y: Math.PI * 3/2, z: 0 }, duration * 0.2, absolutetime + dur)
   }
@@ -572,7 +554,7 @@ function onFixedClick({ duration = 1, absolutetime = null }) {
 function onSampleClick({ duration = 1, absolutetime = null }) {
   const m3 = scene.getObjectByName('ICP375');
   const dur = duration * 0.8
-  moveM2To(new THREE.Vector3(147.72, 52, 15), dur, absolutetime)
+  moveM2To(new THREE.Vector3(150, 52, 15), dur, absolutetime)
   if (m3) {
     gsapRotation(timeLine, m3, { x: 0, y: Math.PI, z: 0 }, duration * 0.2, absolutetime + dur)
   }
@@ -680,115 +662,23 @@ function onArmChange(key, { duration = 1, absolutetime = null }) {
   }
 }
 
-function formatNumber(value) {
+function formatNumber(value, fixed = 2) {
   const num = Number(value);
   if (!Number.isFinite(num)) return '--';
   if (num === 0) return '0.00';
   if (Math.abs(num) >= 1000) return num.toFixed(0);
   if (Math.abs(num) < 0.01) return num.toExponential(2);
-  return num.toFixed(2);
+  return num.toFixed(fixed);
 }
 
 function toSeconds(val) {
   const num = Number(val);
   if (!Number.isFinite(num)) return 0;
-  return Number((num * SIM_TIME_UNIT).toFixed(3));
-}
-
-function formatTimestamp(date) {
-  if (!(date instanceof Date)) return '';
-  const pad = (n) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
-}
-
-function normalizeNode(node) {
-  if (!node) return '';
-  return String(node).replace(/^root\\./, '');
-}
-
-function formatEventLabel(item) {
-  if (!item) return '事件';
-  const parts = [];
-  if (item.system_type) parts.push(item.system_type);
-  if (item.type) parts.push(item.type);
-  if (!parts.length && item.event_type) parts.push(item.event_type);
-  return parts.length ? parts.join(' · ') : '事件';
-}
-
-function buildEventPath(item) {
-  if (!item) return '';
-  if (item.event_path) return item.event_path;
-  if (item.path) return item.path;
-  const from = normalizeNode(item.from);
-  const to = normalizeNode(item.to);
-  if (from || to) {
-    const left = from || '未知';
-    const right = to || '未知';
-    return `${left} → ${right}`;
-  }
-  if (item.description) return item.description;
-  if (item.name) return item.name;
-  return '---';
-}
-
-function badgeStatusFor(item) {
-  const type = item && item.type;
-  if (type === 'transfer_start') return 'processing';
-  if (type === 'transfer_end') return 'success';
-  if (type === 'alarm' || type === 'error') return 'error';
-  if (type === 'warning') return 'warning';
-  return 'default';
-}
-
-function buildRow(item, key) {
-  const simSeconds = toSeconds(item?.sim_time);
-  const durationSeconds = item?.duration_estimate != null ? toSeconds(item.duration_estimate) : null;
-  return {
-    key,
-    label: formatEventLabel(item),
-    path: buildEventPath(item),
-    badgeStatus: badgeStatusFor(item),
-    simSeconds,
-    durationSeconds,
-    simTimeDisplay: formatNumber(simSeconds),
-    durationDisplay: durationSeconds != null ? formatNumber(durationSeconds) : '--',
-    raw: item || {},
-  };
-}
-
-function recalcMetrics() {
-  if (!eventRows.value.length) {
-    eventSummary.totalSimTime = 0;
-    eventSummary.eventCount = 0;
-    eventSummary.avgDuration = 0;
-    eventSummary.throughput = 0;
-    eventSummary.runDuration = 0;
-    if (helpersParams.simStatus !== 'finished') eventSummary.progress = 0;
-    return;
-  }
-  const sorted = [...eventRows.value].sort((a, b) => a.simSeconds - b.simSeconds);
-  const last = sorted[sorted.length - 1];
-  const durations = sorted
-    .map((row) => row.durationSeconds)
-    .filter((num) => Number.isFinite(num) && num > 0);
-  const sumDuration = durations.reduce((acc, cur) => acc + cur, 0);
-  eventSummary.totalSimTime = last.simSeconds;
-  eventSummary.eventCount = sorted.length;
-  eventSummary.avgDuration = durations.length ? sumDuration / durations.length : 0;
-  eventSummary.throughput = eventSummary.totalSimTime > 0 ? eventSummary.eventCount / eventSummary.totalSimTime : 0;
-  eventSummary.runDuration = last.simSeconds;
-  if (helpersParams.simStatus === 'finished') {
-    eventSummary.progress = 100;
-  } else {
-    const denom = simConfig.simulation_time ? simConfig.simulation_time * SIM_TIME_UNIT : 0;
-    const ratio = denom ? (last.simSeconds / denom) * 100 : 0;
-    eventSummary.progress = Math.max(0, Math.min(100, Math.round(ratio)));
-  }
+  return Number((num * SIM_TIME_UNIT).toFixed(2));
 }
 
 function resetEventLog() {
   eventRows.value = [];
-  eventKeySet.clear();
   eventSummary.totalSimTime = 0;
   eventSummary.eventCount = 0;
   eventSummary.avgDuration = 0;
@@ -798,25 +688,18 @@ function resetEventLog() {
     eventSummary.progress = 0;
   }
   eventSummary.lastUpdate = '';
+  helpersParams.isAnimation = false;
 }
 
 function appendEvents(list = []) {
   if (!Array.isArray(list) || !list.length) return;
   const appended = [];
-  list.forEach((item) => {
+  list.forEach((item, index) => {
     if (!item) return;
-    const rowKey = item.id != null ? item.id : `${item.type || 'event'}-${item.sim_time}-${item.from || ''}-${item.to || ''}`;
-    if (eventKeySet.has(rowKey)) return;
-    eventKeySet.add(rowKey);
-    appended.push(buildRow(item, rowKey));
+    const rowKey = `${item.event_type || 'event'}-${toSeconds(item?.sim_time)}-${item.from_location || ''}-${item.to_location || ''}`;
+    appended.push({ index: index, label: rowKey, durationDisplay: toSeconds(item?.duration_estimate) });
   });
-  if (!appended.length) return;
-  const merged = [...eventRows.value, ...appended]
-    .sort((a, b) => a.simSeconds - b.simSeconds)
-    .map((row, idx) => ({ ...row, index: idx + 1 }));
-  eventRows.value = merged;
-  eventSummary.lastUpdate = formatTimestamp(new Date());
-  recalcMetrics();
+  eventRows.value = appended;
 }
 
 async function handleSimStart() {
@@ -844,80 +727,30 @@ async function handleSimStop() {
   }
 }
 
-async function handleAnimationToggle() {
-  if (helpersParams.isAnimation) {
-    handleTimelinePause();
-    helpersParams.isAnimation = false;
-    return;
-  }
-  helpersParams.isAnimation = true;
-  await onSimAnimationChange();
-}
-
-function handleTimelinePlay() {
-  if (!helpersParams.isAnimation) return;
-  onPlay();
-}
-
-function handleTimelinePause() {
-  if (!helpersParams.isAnimation) return;
-  onPause();
-}
-
-function handleTimelineRestart() {
-  if (!helpersParams.isAnimation) return;
-  onRestart();
-}
-
 // 仿真开始关闭
 async function onSimStartChange() {
-  if (helpersParams.isStart) {
+  if (helpersParams.isStart && selectedSim.value) {
     eventState.sinceId = 0;
-    // 深拷贝以移除 reactive proxy
-    const payload = JSON.parse(JSON.stringify(simConfig));
-    const startRes = await start(payload);
-    if (startRes.ok) {
-      const simId = startRes.id || 0;
-      simConfig.simId = simId;
-      timer = setInterval(async () => {
-        const res = await events(simConfig.simId, eventState.sinceId, 200);
-        if (res && res.events) {
-          appendEvents(res.events);
-          const maxIdClient = res.events.reduce((m, e) => Math.max(m, e && e.id ? e.id : 0), eventState.sinceId);
-          eventState.sinceId = Math.max(eventState.sinceId, (res.last_event_id != null ? res.last_event_id : maxIdClient));
-        }
-
-        const res2 = await status(simConfig.simId);
-        if (res2 && res2.status) {
-          helpersParams.simStatus = res2.status;
-          if (res2.status === 'finished') {
-            clearInterval(timer);
-            timer = null;
-          }
-        }
-      }, 1000);
+    simConfig.simId = selectedSim.value || 0;
+    const res = await getRunsById(simConfig.simId, eventState.sinceId, 500);
+    if (res && res.items) {
+      appendEvents(res.items);
+      simAnimation(res.items);
+      const lastEvent = res.items[res.items.length-1];
+      eventSummary.totalSimTime = toSeconds(lastEvent.payload_json?.sim_time);
+      eventSummary.eventCount = res.count || 0;
+      eventSummary.avgDuration = toSeconds(lastEvent.payload_json?.avg_process_time);
+      eventSummary.throughput = lastEvent.payload_json?.wafer_id;
+      eventSummary.progress = 100;
+      eventSummary.lastUpdate = lastEvent?.wall_time;
+      helpersParams.isStart = false;
     }
-  } else {
-    if (timer) {
-      clearInterval(timer);
-      timer = null;
-    }
-    helpersParams.simStatus = '';
-  }
-}
-
-// 仿真动画开启关闭
-async function onSimAnimationChange() {
-  if (helpersParams.isAnimation) {
-    clearInterval(timer);
-    timer = null;
-    const res = await events(simConfig.simId, 0, 2000);
-    if (res && res.events) { appendEvents(res.events); simAnimation(res.events); }
   }
 }
 
 // 仿真动画
 function simAnimation(data) {
+  helpersParams.isAnimation = true;
   // 基于事件构建可控时间线
   if (timeLine) {
     try { timeLine.kill(); } catch(e) {}
@@ -927,7 +760,7 @@ function simAnimation(data) {
 
   const sorted = [...data].sort((a, b) => a.sim_time - b.sim_time);
   sorted.forEach(item => {
-    const type = item.type
+    const type = item.event_type;
     const system_type = item.system_type
     const sim_time = Number(Number(item.sim_time * SIM_TIME_UNIT || 0).toFixed(2))
     const duration_estimate = Number(Number(item.duration_estimate * SIM_TIME_UNIT || 0).toFixed(2))
@@ -939,8 +772,8 @@ function simAnimation(data) {
     // }
 
     if (type === 'transfer_start' && system_type === 'atmospheric') {
-      const from = item.from || ''
-      const to = item.to || ''
+      const from = item.from_location || ''
+      const to = item.to_location || ''
       if (to === "WaferAligner" && from.includes("Cassette")) {
         const pos = from.split(':')[0].split('Cassette ')[1]
         const duration1 = (duration_estimate - 4) / 2  // 将动作总时间分成各个步骤所需的时间
@@ -965,8 +798,8 @@ function simAnimation(data) {
     }
 
     if (type === 'transfer_start' && system_type === 'vacuum') {
-      const from = item.from || ''
-      const to = item.to || ''
+       const from = item.from_location || ''
+      const to = item.to_location || ''
       if (from === "LoadLock" && to === "TransferChamber") {
         const duration4 = duration_estimate - 2
         onWorkChange(`E0`, { duration: duration4, absolutetime: sim_time })

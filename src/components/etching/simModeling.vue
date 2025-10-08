@@ -9,11 +9,11 @@
               <a-button @click="addData" style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">创建</a-button>
             </div>
             <div class="panel-card__tags">
-              <a-tag v-for="opt in experimentOptions" @close="delData(opt.value)" closable>{{ opt.label }}</a-tag>
+              <a-tag v-for="opt in experimentOptions" :class="[clickedTag === opt.value && 'tags-selected']" @click="handleTag(opt.value)" @close="delData(opt.value)" closable>{{ opt.label }}</a-tag>
             </div>
             <FormNumberField
               label="到达间隔"
-              v-model="systemState.arrivalInterval"
+              v-model="parameterState.arrivalInterval"
               :wrapper-style="{ marginBottom: '5px' }"
               :min="0"
               :step="1"
@@ -21,7 +21,7 @@
             />
             <FormNumberField
               label="仿真时间"
-              v-model="systemState.simulationTime"
+              v-model="parameterState.simulationTime"
               :min="0"
               :step="100"
               unit="秒"
@@ -32,14 +32,14 @@
                 <a-space direction="vertical" class="panel-space">
                   <div class="panel-block">
                     <div style="margin-bottom: 8px;" class="panel-block__label">机械臂任务分配策略</div>
-                    <a-radio-group v-model:value="systemState.armStrategy">
+                    <a-radio-group v-model:value="parameterState.armStrategy">
                       <a-radio value="distance">最短路径优先</a-radio>
                       <a-radio value="balance">负载均衡</a-radio>
                     </a-radio-group>
                   </div>
                   <div>
                     <div style="margin-bottom: 8px;" class="panel-block__label">腔室选择策略</div>
-                    <a-radio-group v-model:value="systemState.chamberStrategy" style="height: 68px;display: flex;flex-direction: column;justify-content: space-around;">
+                    <a-radio-group v-model:value="parameterState.chamberStrategy" style="height: 68px;display: flex;flex-direction: column;justify-content: space-around;">
                       <a-radio value="optimized">优先使用最近空闲腔室</a-radio>
                       <a-radio value="process">按工艺参数匹配腔室选择</a-radio>
                     </a-radio-group>
@@ -52,7 +52,7 @@
                     <div class="panel-caption">
                       <div class="panel-block__label">设备故障重试</div>
                       <a-input-number
-                        v-model:value="systemState.faultRetryLimit"
+                        v-model:value="parameterState.faultRetryLimit"
                         :min="0"
                         addon-after="次"
                         class="panel-input-number"
@@ -64,7 +64,7 @@
                     <div class="panel-caption">
                       <div class="panel-block__label">超时阈值</div>
                       <a-input-number
-                        v-model:value="systemState.timeoutThreshold"
+                        v-model:value="parameterState.timeoutThreshold"
                         :min="0"
                         :step="1"
                         class="panel-input-number"
@@ -79,7 +79,7 @@
                 <div class="panel-caption">
                   <div class="panel-block__label">阈值</div>
                   <a-input-number
-                    v-model:value="systemState.particleAlertThreshold"
+                    v-model:value="parameterState.particleAlertThreshold"
                     :min="0"
                     addon-after="个"
                     class="panel-input-number"
@@ -471,8 +471,9 @@
   </div>
 </template>
 
-<script setup>
-import { onMounted, onBeforeUnmount, ref, reactive, watch, h, computed } from "vue";
+<script setup lang="ts">
+// @ts-nocheck
+import { onMounted, onBeforeUnmount, ref, reactive, watch, h } from "vue";
 import { PlusCircleOutlined } from '@ant-design/icons-vue';
 import FormNumberField from '@/components/common/FormNumberField.vue';
 import FormRangeField from '@/components/common/FormRangeField.vue';
@@ -497,9 +498,13 @@ import arm2 from "@/assets/images/map/arm2.png";
 import edge from "@/assets/images/map/edge.png";
 import chamber from "@/assets/images/map/chamber.png";
 import { message } from 'ant-design-vue';
-import { createParameter, getParameter, getParameterById, delParameterById } from '@/api/etching/parameter';
+import { createParameter, updateParameterById, getParameter, getParameterById, delParameterById } from '@/api/etching/parameter';
+import { createRuns } from '@/api/etching/runs';
 import { Etch } from '@/stores/etch';
 
+const props = defineProps<{
+  param_key: any
+}>();
 const etchStore = Etch()
 const emit = defineEmits(["regionClick", "mapClick"]);
 
@@ -508,6 +513,7 @@ const mapInstance = ref(null);
 const experimentOptions = ref([]);
 const parameterCollapseKeys = ref([]);
 const clickedCom = ref(null);
+const clickedTag = ref(null);
 
 const overlays = [];
 let pointerMoveListenerKey = null;
@@ -534,17 +540,14 @@ const EXTENT_EXPANSION_RATIO = 1;
 const activeTab = ref("system");
 const systemCollapseKeys = ref(['strategy', 'capacity', 'alerts']);
 
-const systemState = reactive({
+const parameterState = reactive({
   arrivalInterval: 10,
   simulationTime: 10000,
   armStrategy: "distance",
   chamberStrategy: "optimized",
   faultRetryLimit: 2,
   timeoutThreshold: 10,
-  particleAlertThreshold: 5
-});
-
-const parameterState = reactive({
+  particleAlertThreshold: 5,
   waferCassetteCount: 4,
   waferCassetteCapacity: 1000,
   unlimitedWaferSupply: true,
@@ -588,6 +591,32 @@ const parameterState = reactive({
   dryingTimeRange: [15, 20],
   dryingGasPressureRange: [1, 2]
 });
+
+const parameterObj = [
+  { key: "cassette.count", value: 'waferCassetteCount' },
+  { key: "cassette.capacity", value: 'waferCassetteCapacity' },
+  { key: "cassette.change_time", value: 'arrivalInterval' },
+  { key: "atmo_robot.count", value: 'atmosphereArmCount' },
+  { key: "atmo_robot.transfer_time", value: 'atmosphereTransferTimeRange' },
+  { key: "vac_robot.count", value: 'vacuumArmCount' },
+  { key: "vac_robot.transfer_time", value: 'vacuumTransferTimeRange' },
+  { key: "load_lock.vacuum_time", value: 'loadLockPumpDownTimeRange' },
+  { key: "load_lock.vent_time", value: 'loadLockVentTimeRange' },
+  { key: "edge_detector.align_time", value: 'edgeSeekTimeRange' },
+  { key: "edge_detector.calibration_time", value: 'edgeCalibrationTimeRange' },
+  { key: "edge_detector.max_batch", value: 'edgeContinuousRunCount' },
+  { key: "etch.count", value: 'etchChamberCount' },
+  { key: "etch.time_A", value: 'etchChamberATimeRange' },
+  { key: "etch.time_B", value: 'etchChamberBTimeRange' },
+  { key: "etch.time_C", value: 'etchChamberCTimeRange' },
+  { key: "etch.time_D", value: 'etchChamberDTimeRange' },
+  { key: "etch.time_E", value: 'etchChamberETimeRange' },
+  { key: "etch.time_F", value: 'etchChamberFTimeRange' },
+  { key: "clean.count", value: 'cleaningChamberCount' },
+  { key: "clean.time", value: 'cleaningTimeRange' },
+  { key: "clean.dry_time", value: 'dryingTimeRange' },
+  { key: "simulation.duration", value: 'simulationTime' },
+]
 
 const comPos = [
   {
@@ -943,6 +972,11 @@ const addImageOverlay = ({ src, coordinate, size, opacity, positioning = "center
   return overlay;
 };
 
+const handleTag = (val) => {
+  clickedTag.value = val;
+  getDataById(val);
+}
+
 // ----------------------------------------------- 接口调用 -----------------------------------------
 const getData = async () => {
   const data = await getParameter('etching', 1);
@@ -950,17 +984,30 @@ const getData = async () => {
   console.log(experimentOptions.value)
 }
 
+const getDataById = async (id) => {
+  const data = await getParameterById(id);
+  if (data) {
+    data.values.forEach(t => {
+      const item = parameterObj.find(obj => obj.key === t.param_key);
+      if(item) {
+        parameterState[item.value] = t.value_json
+      }
+    })
+  }
+}
+
 const addData = async () => {
+  let name = `实验室${experimentOptions.value.length+1}`;
   const param = {
     template_id: 1,
     domain_key: "etching",
-    name: `实验室${experimentOptions.value.length+1}`,
+    name: name,
     description: "蚀刻机参数集",
     tags: ["etching"],
     values: {
       "cassette.count": parameterState.waferCassetteCount,
       "cassette.capacity": parameterState.waferCassetteCapacity,
-      "cassette.change_time": systemState.arrivalInterval,
+      "cassette.change_time": parameterState.arrivalInterval,
       "atmo_robot.count": parameterState.atmosphereArmCount,
       "atmo_robot.transfer_time": parameterState.atmosphereTransferTimeRange,
       "vac_robot.count": parameterState.vacuumArmCount,
@@ -980,12 +1027,24 @@ const addData = async () => {
       "clean.count": parameterState.cleaningChamberCount,
       "clean.time": parameterState.cleaningTimeRange,
       "clean.dry_time": parameterState.dryingTimeRange,
-      "simulation.duration": systemState.simulationTime,
-      "wafer.arrival_interval": [0, systemState.arrivalInterval]
+      "simulation.duration": parameterState.simulationTime,
+      "wafer.arrival_interval": [0, parameterState.arrivalInterval]
     }
   }
-  const res = await createParameter(param)
+  let res = null;
+  if (clickedTag.value) {
+    name = experimentOptions.value.find(t => t.value === clickedTag.value)?.label;
+    param.name = name;
+    res = await updateParameterById(clickedTag.value, param);
+  } else {
+    res = await createParameter(param);
+  } 
   if (res) {
+    await createRuns({
+      domain_key: "etching",
+      parameter_set_id: res.id,
+      name: name
+    });
     getData();
     message.success('保存成功！')
   }
@@ -1000,6 +1059,10 @@ const delData = async (id) => {
 onMounted(async () => {
   await initializeMap();
   getData()
+  if (props.param_key) {
+    handleTag(props.param_key)
+  }
+  
   
   comPos.forEach(item => {
     drawRegionOnBasemap({
@@ -1112,6 +1175,11 @@ defineExpose({
   height: 28px;
   line-height: 26px;
   border-radius: 15px;
+  cursor: pointer;
+}
+
+.tags-selected {
+  border: 1px solid rgb(36, 132, 250);
 }
 
 .panel-card :deep(.ant-card-head) {

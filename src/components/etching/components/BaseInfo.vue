@@ -2,7 +2,7 @@
   <div class="simAnalysis-base">
     <a-row :gutter="[16, 16]" class="base-row">
       <a-col :xs="24" :xl="9">
-        <a-card title="基础模型参数" headStyle="border-bottom: 0px solid" class="base-info-card">
+        <a-card title="基础模型参数" class="base-info-card">
           <a-row :gutter="[12, 12]">
             <a-col v-for="item in baseParameters" :key="item.label" :span="24" class="base-info-item">
               <div class="base-info-item__icon">
@@ -19,7 +19,7 @@
       </a-col>
 
       <a-col :xs="24" :xl="15">
-        <a-card title="机台参数" headStyle="border-bottom: 0px solid" class="machine-card">
+        <a-card title="机台参数" class="machine-card">
           <div class="chamber_box">
             <div class="chamber">
               <a-col v-for="item in chamber.children" :key="item.hint" :xs="2" :lg="7">
@@ -62,7 +62,7 @@
 
     <a-row :gutter="[16, 16]">
       <a-col :span="24">
-        <a-card title="核心产能指标" headStyle="border-bottom: 0px solid" class="performance-card">
+        <a-card title="核心产能指标" class="performance-card">
           <div class="core-metrics">
             <div class="core-summary">
               <div class="core-summary__stats">
