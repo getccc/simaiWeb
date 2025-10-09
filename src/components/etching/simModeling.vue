@@ -9,7 +9,7 @@
               <a-button @click="addData" style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">创建</a-button>
             </div>
             <div class="panel-card__tags">
-              <a-tag v-for="opt in experimentOptions" :class="[clickedTag === opt.value && 'tags-selected']" @click="handleTag(opt.value)" @close="delData(opt.value)" closable>{{ opt.label }}</a-tag>
+              <a-tag v-for="opt in experimentOptions" :key="opt.value" :class="[clickedTag === opt.value && 'tags-selected']" @click="handleTag(opt.value)" @close="delData(opt.value)" closable>{{ opt.label }}</a-tag>
             </div>
             <FormNumberField
               label="到达间隔"
@@ -980,8 +980,10 @@ const handleTag = (val) => {
 // ----------------------------------------------- 接口调用 -----------------------------------------
 const getData = async () => {
   const data = await getParameter('etching', 1);
-  experimentOptions.value = data.map(t => { return { label: t.name, value: t.id } })
-  console.log(experimentOptions.value)
+  const newData = data.map(t => ({ label: t.name, value: t.id }));
+  // replace the array to ensure reactivity with ref
+  experimentOptions.value = newData;
+  console.log('experimentOptions', experimentOptions.value);
 }
 
 const getDataById = async (id) => {
@@ -997,7 +999,9 @@ const getDataById = async (id) => {
 }
 
 const addData = async () => {
-  let name = `实验室${experimentOptions.value.length+1}`;
+  const arr = (experimentOptions.value || []).map(t => Number((t.label || '').split('实验室')[1]))
+  const max = Math.max(...arr);
+  let name = `实验室${isFinite(max) ? max + 1 : 1}`;
   const param = {
     template_id: 1,
     domain_key: "etching",
@@ -1032,8 +1036,8 @@ const addData = async () => {
     }
   }
   let res = null;
-  if (clickedTag.value) {
-    name = experimentOptions.value.find(t => t.value === clickedTag.value)?.label;
+    if (clickedTag.value) {
+    name = (experimentOptions.value || []).find(t => t.value === clickedTag.value)?.label;
     param.name = name;
     res = await updateParameterById(clickedTag.value, param);
   } else {
@@ -1047,13 +1051,15 @@ const addData = async () => {
     });
     getData();
     message.success('保存成功！')
+    console.log('保存' + name)
   }
 }
 
 const delData = async (id) => {
   await delParameterById(id);
-  // getData();
+  getData();
   message.success('删除成功！')
+  console.log('删除' + id)
 }
 
 onMounted(async () => {

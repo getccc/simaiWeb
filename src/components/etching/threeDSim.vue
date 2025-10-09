@@ -86,12 +86,13 @@
         <CaretRightOutlined @click="onPlay" v-if="!timelineState.isPlaying" />
         <PauseOutlined @click="onPause" v-else />
         <StopOutlined @click="onRestart"/>
-
-        <PlusCircleOutlined @click="timelineState.speed += 1" />
+        
+        <MinusCircleOutlined @click="onSpeedChange(timelineState.speed - 1)" />
         <div class="speed-control">
-          <a-input-number addon-before="x" v-model:value="timelineState.speed" :min="0.1" :max="10" :step="0.1" @change="onSpeedChange" />
+          <a-input-number addon-before="x" v-model:value="timelineState.speed" :min="1" :max="20" :step="1" @change="onSpeedChange" />
         </div>
-        <MinusCircleOutlined @click="timelineState.speed -= 1" />
+        <PlusCircleOutlined @click="onSpeedChange(timelineState.speed + 1)" />
+
         <ForwardOutlined @click="onScrub(timelineState.current + 10)" />
       </div>
       <div class="timeline-slider">
@@ -137,7 +138,7 @@ const timelineState = reactive({
   isPlaying: false,
   current: 0,
   duration: 0,
-  speed: 10,
+  speed: 1,
 });
 
 // 将仿真分钟映射为秒（例如 1 分钟 -> 6 秒）
@@ -876,7 +877,8 @@ function onScrub(val) {
 
 // 速度
 function onSpeedChange(val) {
-  const v = Number(val) || 1
+  const v = Number(val) || 1;
+  if (v < 0) return
   timelineState.speed = v
   if (timeLine) timeLine.timeScale(v)
 }

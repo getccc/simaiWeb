@@ -16,7 +16,7 @@ export default defineConfig({
     cors: true, // 启用 CORS
     proxy: {
       "/api": {
-        target: "http://0.0.0.0:8000/",
+        target: "http://47.99.132.129:8087/",
         changeOrigin: true, // 修改请求头中的源
         rewrite: (path) => path.replace(/^\/api/, "api"), // 可选的路径重写
       },
