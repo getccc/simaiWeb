@@ -34,8 +34,12 @@
             :pagination="false"
             :scroll="{ y: `calc(100vh - 220px)` }"
             row-key="key"
+            :row-class-name="(_record, index) => (index < selectedAnimation ? 'table-end' : (index === selectedAnimation ? 'table-doing' : null))"
           >
-            <template #bodyCell="{ column, record }">
+            <template #bodyCell="{ column, record, index }">
+              <template v-if="column.key === 'index'">
+                <span class="event-index">{{ index }}</span>
+              </template>
               <template v-if="column.key === 'label'">
                 <a-space size="small">
                   <a-badge :status="record.badgeStatus" />
@@ -123,6 +127,7 @@ import { createRuns, getRuns, getRunsById, cancelRunsById } from '@/api/etching/
 const container = ref(null);
 const simOptions = ref([]);
 const selectedSim = ref(null);
+const selectedAnimation = ref(-1);
 
 let renderer, scene, camera, controls, target;
 let model = null;
@@ -159,7 +164,7 @@ const helpersParams = reactive({
 });
 
 // 日志容器引用与增量状态
-const eventState = reactive({ sinceId: 0 });
+const eventState = reactive({ sinceId: 0, nextSinceId: -1 });
 
 const sceneOptions = [
   { label: '全景视图', value: 1 },
@@ -185,6 +190,7 @@ const eventColumns = [
 ];
 
 const eventRows = ref([]);
+const animateRows = ref([]);
 
 const simOperationState = reactive({ starting: false });
 
@@ -562,20 +568,20 @@ function onSampleClick({ duration = 1, absolutetime = null }) {
 }
 
 // 机械臂1伸缩
-function onArm1Change(key, { duration = 1, absolutetime = null }) {
+function onArm1Change(key, { duration = 1, absolutetime = null, onComplete = null }) {
   const m4 = scene.getObjectByName('ICP372');
   const m5 = scene.getObjectByName('ICP371');
   const m7 = scene.getObjectByName('ICP368');
   const m8 = scene.getObjectByName('ICP367');
   
   if (key === '机械臂1伸出') {
-    controlArm(timeLine, m4, m5, 'extend', duration, absolutetime )
+    controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, onComplete)
   } else if (key === '机械臂1收回') {
-    controlArm(timeLine, m4, m5, 'retract', duration, absolutetime)
+    controlArm(timeLine, m4, m5, 'retract', duration, absolutetime, onComplete)
   } else if (key === '机械臂2伸出') {
-    controlArm(timeLine, m8, m7, 'extend', duration, absolutetime)
+    controlArm(timeLine, m8, m7, 'extend', duration, absolutetime, onComplete)
   } else if (key === '机械臂2收回') {
-    controlArm(timeLine, m8, m7, 'retract', duration, absolutetime)
+    controlArm(timeLine, m8, m7, 'retract', duration, absolutetime, onComplete)
   }
 }
 
@@ -611,7 +617,7 @@ function moveM2To(targetVec3, duration = 1, absolutetime = null) {
 }
 
 // 旋转
-function gsapRotation(timeLine, model, target, duration = 1, absolutetime = null) {
+function gsapRotation(timeLine, model, target, duration = 1, absolutetime = null, onComplete = null) {
   console.log(`${absolutetime}: rot`, duration)
   timeLine.to(model.rotation, {
     x: target.x,
@@ -619,11 +625,14 @@ function gsapRotation(timeLine, model, target, duration = 1, absolutetime = null
     z: target.z,
     duration: duration,
     ease: 'none',
+    onComplete: () => {
+      onComplete && onComplete()
+    }
   }, absolutetime)
 }
 
 // 机械臂控制
-function controlArm(timeLine, arm1, arm2, action, duration = 1, absolutetime = null) {
+function controlArm(timeLine, arm1, arm2, action, duration = 1, absolutetime = null, onComplete = null) {
   let roatateY1 = 0
   let roatateY2 = 0
   if (action === 'extend') {
@@ -631,11 +640,11 @@ function controlArm(timeLine, arm1, arm2, action, duration = 1, absolutetime = n
     roatateY2 = Math.PI/2
   }
   gsapRotation(timeLine, arm1, { x: 0, y: roatateY1, z: 0 }, duration, absolutetime)
-  gsapRotation(timeLine, arm2, { x: 0, y: roatateY2, z: 0 }, duration, absolutetime)
+  gsapRotation(timeLine, arm2, { x: 0, y: roatateY2, z: 0 }, duration, absolutetime, onComplete)
 }
 
 // 机械臂控制
-function onArmChange(key, { duration = 1, absolutetime = null }) {
+function onArmChange(key, { duration = 1, absolutetime = null, onComplete = null }) {
   const time2 = absolutetime + duration
   const time3 = time2 + duration
   const time4 = time3 + duration
@@ -643,23 +652,23 @@ function onArmChange(key, { duration = 1, absolutetime = null }) {
     onArm1Change('机械臂1伸出', { duration, absolutetime }) // 机械臂伸出
     onArm1Change('机械臂1收回', { duration, absolutetime: time2}) // 机械臂收回
     onArm1Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
-    onArm1Change('机械臂2收回', { duration, absolutetime: time4 }) // 机械臂收回
+    onArm1Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
   }
   if (key === 2) {
     onArm1Change('机械臂1伸出', { duration, absolutetime }) // 机械臂伸出
-    onArm1Change('机械臂1收回', { duration, absolutetime: time2 }) // 机械臂收回
+    onArm1Change('机械臂1收回', { duration, absolutetime: time2, onComplete }) // 机械臂收回
     // onArm1Change('机械臂1伸出') // 机械臂伸出
     // onArm1Change('机械臂1收回') // 机械臂收回
     // onArm1Change('机械臂2伸出') // 机械臂伸出
     // onArm1Change('机械臂2收回') // 机械臂收回
     onArm1Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
-    onArm1Change('机械臂2收回', { duration, absolutetime: time4 }) // 机械臂收回
+    onArm1Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
   }
   if (key === 3) {
     onArm2Change('机械臂1伸出', { duration, absolutetime }) // 机械臂伸出
     onArm2Change('机械臂1收回', { duration, absolutetime: time2 }) // 机械臂收回
     onArm2Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
-    onArm2Change('机械臂2收回', { duration, absolutetime: time4 }) // 机械臂收回
+    onArm2Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
   }
 }
 
@@ -675,7 +684,8 @@ function formatNumber(value, fixed = 2) {
 function toSeconds(val) {
   const num = Number(val);
   if (!Number.isFinite(num)) return 0;
-  return Number((num * SIM_TIME_UNIT).toFixed(2));
+  // return Number((num * SIM_TIME_UNIT).toFixed(2));
+  return Number((num).toFixed(2));
 }
 
 function resetEventLog() {
@@ -692,15 +702,32 @@ function resetEventLog() {
   helpersParams.isAnimation = false;
 }
 
+function randTwoDigitGreaterThan(n) {
+  if (n >= 99) return 100;
+  const min = Math.max(10, Math.floor(n) + 1); 
+  const max = 99;
+  return min + Math.floor(Math.random() * (max - min + 1));
+}
+
 function appendEvents(list = []) {
   if (!Array.isArray(list) || !list.length) return;
   const appended = [];
-  list.forEach((item, index) => {
+  list.forEach((item) => {
     if (!item) return;
     const rowKey = `${item.event_type || 'event'}-${toSeconds(item?.sim_time)}-${item.from_location || ''}-${item.to_location || ''}`;
-    appended.push({ index: index, label: rowKey, durationDisplay: toSeconds(item?.duration_estimate) });
+    appended.push({ label: rowKey, durationDisplay: toSeconds(item?.duration_estimate) });
   });
-  eventRows.value = appended;
+
+  eventRows.value = [...eventRows.value, ...appended];
+  animateRows.value = [...animateRows.value, ...list];
+
+  const lastEvent = list[list.length-1];
+  eventSummary.totalSimTime = toSeconds(lastEvent.payload_json?.sim_time);
+  eventSummary.eventCount = eventRows.value.length || 0;
+  eventSummary.avgDuration = toSeconds(lastEvent.payload_json?.avg_process_time);
+  eventSummary.throughput = lastEvent.payload_json?.wafer_id;
+  eventSummary.progress = randTwoDigitGreaterThan(eventSummary.progress);
+  eventSummary.lastUpdate = lastEvent?.wall_time;
 }
 
 async function handleSimStart() {
@@ -728,24 +755,34 @@ async function handleSimStop() {
   }
 }
 
-// 仿真开始关闭
+function endEventLog() {
+  clearInterval(timer);
+  timer = null;
+  helpersParams.isStart = false;
+  eventSummary.progress = 100;
+  simAnimation(animateRows.value);
+}
+
+// 仿真开始
 async function onSimStartChange() {
   if (helpersParams.isStart && selectedSim.value) {
     eventState.sinceId = 0;
+    eventState.nextSinceId = -1;
     simConfig.simId = selectedSim.value || 0;
-    const res = await getRunsById(simConfig.simId, eventState.sinceId, 500);
-    if (res && res.items) {
-      appendEvents(res.items);
-      simAnimation(res.items);
-      const lastEvent = res.items[res.items.length-1];
-      eventSummary.totalSimTime = toSeconds(lastEvent.payload_json?.sim_time);
-      eventSummary.eventCount = res.count || 0;
-      eventSummary.avgDuration = toSeconds(lastEvent.payload_json?.avg_process_time);
-      eventSummary.throughput = lastEvent.payload_json?.wafer_id;
-      eventSummary.progress = 100;
-      eventSummary.lastUpdate = lastEvent?.wall_time;
-      helpersParams.isStart = false;
-    }
+
+    timer = setInterval(async () => {
+      if (eventState.sinceId === eventState.nextSinceId) return;
+      eventState.nextSinceId = eventState.sinceId;
+      const res = await getRunsById(simConfig.simId, eventState.nextSinceId, 200);
+      if (res && res.items) {
+        appendEvents(res.items);
+        eventState.sinceId = res.next_since_id;
+
+        if (!res.next_since_id) {
+          endEventLog();
+        }
+      }
+    }, 1000);
   }
 }
 
@@ -760,7 +797,7 @@ function simAnimation(data) {
   let lastSimTime = 0;
 
   const sorted = [...data].sort((a, b) => a.sim_time - b.sim_time);
-  sorted.forEach(item => {
+  sorted.forEach((item, index) => {
     const type = item.event_type;
     const system_type = item.system_type
     const sim_time = Number(Number(item.sim_time * SIM_TIME_UNIT || 0).toFixed(2))
@@ -781,12 +818,12 @@ function simAnimation(data) {
         onPresetChange(`A${pos}`, { duration: duration1, absolutetime: sim_time })
         onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration1 })
         onFixedClick({ duration: duration1, absolutetime: sim_time + duration1 + 2 })
-        onArmChange(2, { duration: 0.5, absolutetime: sim_time + duration_estimate - 2 })
+        onArmChange(2, { duration: 0.5, absolutetime: sim_time + duration_estimate - 2, onComplete: () => { selectedAnimation.value = index } })
       }
       if (to === "LoadLock") {
         const duration2 = duration_estimate - 2
         onSampleClick({ duration: duration2, absolutetime: sim_time })
-        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration2 })
+        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration2, onComplete: () => { selectedAnimation.value = index } })
       }
       if (to.includes("Cassette")) {
         const duration3 = (duration_estimate - 4) / 2  // 将动作总时间分成各个步骤所需的时间
@@ -794,7 +831,7 @@ function simAnimation(data) {
         onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration3 })
         const pos = to.split(':')[0].split('Cassette ')[1]
         onPresetChange(`A${pos}`, { duration: duration3, absolutetime: sim_time + duration3 + 2 })
-        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration3 - 2 })
+        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration3 - 2, onComplete: () => { selectedAnimation.value = index } })
       }
     }
 
@@ -804,13 +841,13 @@ function simAnimation(data) {
       if (from === "LoadLock" && to === "TransferChamber") {
         const duration4 = duration_estimate - 2
         onWorkChange(`E0`, { duration: duration4, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration4 })
+        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration4, onComplete: () => { selectedAnimation.value = index } })
       }
       if (from.includes("EtchingChamber") && to === "TransferChamber") {
         const pos = from.split('EtchingChamber ')[1]
         const duration5 = duration_estimate - 2
         onWorkChange(`E${pos}`, { duration: duration5, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration5 })
+        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration5, onComplete: () => { selectedAnimation.value = index } })
       }
       if (from.includes("CleaningChamber")) {
         const pos = from.split('CleaningChamber ')[1]
@@ -818,19 +855,19 @@ function simAnimation(data) {
         onWorkChange(`F${pos}`, { duration: duration6, absolutetime: sim_time })
         onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration6 })
         onWorkChange(`E0`, { duration: duration6, absolutetime: sim_time + duration6 + 2 })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration6 - 2 })
+        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration6 - 2, onComplete: () => { selectedAnimation.value = index } })
       }
       if (to.includes("EtchingChamber")) {
         const pos = to.split('EtchingChamber ')[1]
         const duration7 = duration_estimate - 2
         onWorkChange(`E${pos}`, { duration: duration7, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration7 })
+        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration7, onComplete: () => { selectedAnimation.value = index } })
       }
       if (to.includes("CleaningChamber")) {
         const pos = to.split('CleaningChamber ')[1]
         const duration8 = duration_estimate - 2
         onWorkChange(`F${pos}`, { duration: duration8, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration8 })
+        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration8, onComplete: () => { selectedAnimation.value = index } })
       }
     }
 
@@ -1020,6 +1057,14 @@ onBeforeUnmount(() => {
 
 .panel-table :deep(.ant-table-tbody > tr:hover > td) {
   background: rgba(24, 144, 255, 0.08);
+}
+
+.panel-table :deep(.table-end) td {
+  background-color: #a6e0b2;
+}
+
+.panel-table :deep(.table-doing) td {
+  background-color: #9792e7;
 }
 
 .event-label-text {

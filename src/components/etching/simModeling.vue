@@ -6,7 +6,7 @@
         <a-tab-pane key="system" tab="系统配置">
           <div style="margin-top: 16px;" class="panel-stack">
             <div class="panel-card__block">
-              <a-button @click="addData" style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">创建</a-button>
+              <a-button @click="addData" style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">{{ clickedTag ? '应用' : '创建' }}</a-button>
             </div>
             <div class="panel-card__tags">
               <a-tag v-for="opt in experimentOptions" :key="opt.value" :class="[clickedTag === opt.value && 'tags-selected']" @click="handleTag(opt.value)" @close="delData(opt.value)" closable>{{ opt.label }}</a-tag>
