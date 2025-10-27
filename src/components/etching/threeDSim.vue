@@ -723,6 +723,92 @@ function applyMaterialTransparency(material, enable, opacity = 0.25, tint) {
   material.needsUpdate = true
 }
 
+// 平滑地淡入/淡出材质不透明度（返回 Promise，方便 await）
+// 支持单个材质或材质数组。会在必要时启用 material.transparent 并在完成后恢复原始状态。
+function fadeMaterial(material, toOpacity = 0, duration = 1) {
+  if (!material) return Promise.resolve();
+
+  // 支持材质数组
+  if (Array.isArray(material)) {
+    return Promise.all(material.map(m => fadeMaterial(m, toOpacity, duration)));
+  }
+
+  return new Promise((resolve) => {
+    // 确保保存原始状态
+    if (!materialStateMap.has(material)) {
+      materialStateMap.set(material, {
+        transparent: !!material.transparent,
+        opacity: material.opacity !== undefined ? material.opacity : 1,
+        depthWrite: material.depthWrite !== undefined ? material.depthWrite : true,
+      });
+    }
+
+    // 确保有 opacity 字段
+    if (material.opacity === undefined) material.opacity = 1;
+
+    // 开始动画前确保透明模式开启以允许混合
+    material.transparent = true;
+
+    // 若目标是透明（<1），通常关闭 depthWrite 以避免深度排序问题
+    if (toOpacity < 1 && material.depthWrite !== undefined) material.depthWrite = false;
+
+    // 使用 gsap 平滑动画材质的 opacity
+    try {
+      gsap.to(material, {
+        opacity: toOpacity,
+        duration: Math.max(0, Number(duration) || 0.001),
+        ease: 'power1.inOut',
+        onUpdate: () => {
+          material.needsUpdate = true;
+        },
+        onComplete: () => {
+          // 到达不透明(1)时，恢复原始 depthWrite/transparent（如果有保存）
+          const original = materialStateMap.get(material);
+          if (original && toOpacity >= (original.opacity || 1)) {
+            material.transparent = original.transparent;
+            material.opacity = original.opacity;
+            if (material.depthWrite !== undefined) material.depthWrite = original.depthWrite;
+            material.needsUpdate = true;
+          } else {
+            // 保持当前 opacity（例如半透明状态）并确保 needsUpdate
+            material.needsUpdate = true;
+          }
+          resolve();
+        }
+      });
+    } catch (e) {
+      // 若 gsap 出错，直接设置并 resolve
+      material.opacity = toOpacity;
+      material.needsUpdate = true;
+      resolve();
+    }
+  });
+}
+
+// 对单个 Mesh 进行淡入/淡出（会先 clone 材质以避免影响共享材质）
+function fadeMeshTransparency(mesh, toOpacity = 0, duration = 1) {
+  if (!mesh) return Promise.resolve();
+  // 确保该 mesh 使用唯一材质副本
+  try { ensureUniqueMaterial(mesh); } catch (e) { /* ignore */ }
+  return fadeMaterial(mesh.material, toOpacity, duration);
+}
+
+// 便捷函数：淡入（透明->实体）
+function fadeInMesh(mesh, duration = 1) {
+  // 恢复到原始不透明度（若有保存）或 1
+  if (!mesh || !mesh.material) return Promise.resolve();
+  const mat = Array.isArray(mesh.material) ? mesh.material[0] : mesh.material;
+  const original = materialStateMap.get(mat);
+  const target = original ? (original.opacity !== undefined ? original.opacity : 1) : 1;
+  return fadeMeshTransparency(mesh, target, duration);
+}
+
+// 便捷函数：淡出（实体->透明）
+function fadeOutMesh(mesh, duration = 1, targetOpacity = 0.15) {
+  if (!mesh || !mesh.material) return Promise.resolve();
+  return fadeMeshTransparency(mesh, targetOpacity, duration);
+}
+
 // 释放材质
 function disposeMaterial(material) {
   if (!material) return
@@ -856,7 +942,7 @@ function onArm1Change(key, { duration = 1, absolutetime = null, onComplete = nul
   const arm5 = scene.getObjectByName('ICP370');
   const aligner = scene.getObjectByName('ICP313');
   const loadLock = scene.getObjectByName('对齐002');
-  // wafer_id && console.log(key, wafer_id)
+  wafer_id && console.log(key, wafer_id)
   
   if (key === '机械臂1伸出') {
     controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, onComplete)
@@ -928,27 +1014,32 @@ function onArm2Change(key, { duration = 1, absolutetime = null, onComplete = nul
   const armR = scene.getObjectByName('对象104');
 
   const loadLock = scene.getObjectByName('对齐002');
-  wafer_id && console.log(key, wafer_id, `etch${each_id}`)
+  // wafer_id && console.log(key, wafer_id, `etch${each_id}`)
   
   if (key === '机械臂1伸出') {
     controlArm(timeLine, m10, m11, 'extend', duration, absolutetime)
   } else if (key === '机械臂1伸出真空仓取货') {
     controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
       model = wafersMap[wafer_id];
-      setSkin(model, skins.etch);
+      // setSkin(model, skins.etch);
       attachPreserveWorld(model, loadLock, 'arm2-1');
       onComplete && onComplete();
     })
   } else if (key === '机械臂1伸出蚀刻室放货') {
     controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
-      model = wafersMap[wafer_id];
-      attachPreserveWorld(model, armL, `etch${each_id}`);
+      let waferPre = wafersMap[wafer_id];
+      attachPreserveWorld(waferPre, armL, `etch${each_id}`);
+      fadeOutMesh(waferPre, 5, 0.1)
+      setTimeout(() => {
+        setSkin(waferPre, skins.etch);
+        fadeInMesh(waferPre, 5)
+      }, 5 * 1000);
       onComplete && onComplete();
     })
   } else if (key === '机械臂1伸出蚀刻室取货') {
     controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
       model = wafersMap[wafer_id];
-      setSkin(model, skins.ready);
+      // setSkin(model, skins.ready);
       const obj = locateMap[`etch${each_id}`]
       const eachModel = scene.getObjectByName(obj.name)
       attachPreserveWorld(model, eachModel, 'arm2-1');
@@ -956,8 +1047,13 @@ function onArm2Change(key, { duration = 1, absolutetime = null, onComplete = nul
     })
   } else if (key === '机械臂1伸出清洗仓放货') {
     controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
-      model = wafersMap[wafer_id];
-      attachPreserveWorld(model, armL, `clean${each_id}`);
+      let waferEtch = wafersMap[wafer_id];
+      attachPreserveWorld(waferEtch, armL, `clean${each_id}`);
+      fadeOutMesh(waferEtch, 5, 0.1)
+      setTimeout(() => {
+        setSkin(waferEtch, skins.ready);
+        fadeInMesh(waferEtch, 5)
+      }, 5 * 1000);
       onComplete && onComplete();
     })
   } else if (key === '机械臂1伸出清洗仓取货') {
