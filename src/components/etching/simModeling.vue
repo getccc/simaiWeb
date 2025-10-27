@@ -6,26 +6,41 @@
         <a-tab-pane key="system" tab="系统配置">
           <div style="margin-top: 16px;" class="panel-stack">
             <div class="panel-card__block">
-              <a-button @click="addData" style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">{{ clickedTag ? '应用' : '创建' }}</a-button>
+              <a-button @click="addData" style="width: 320px;border: 1px solid #2484FA;color: #2484FA;" :icon="h(PlusCircleOutlined)">创建</a-button>
             </div>
             <div class="panel-card__tags">
               <a-tag v-for="opt in experimentOptions" :key="opt.value" :class="[clickedTag === opt.value && 'tags-selected']" @click="handleTag(opt.value)" @close="delData(opt.value)" closable>{{ opt.label }}</a-tag>
             </div>
-            <FormNumberField
-              label="到达间隔"
-              v-model="parameterState.arrivalInterval"
-              :wrapper-style="{ marginBottom: '5px' }"
-              :min="0"
-              :step="1"
-              unit="秒"
-            />
-            <FormNumberField
-              label="仿真时间"
-              v-model="parameterState.simulationTime"
-              :min="0"
-              :step="100"
-              unit="秒"
-            />
+            <a-space direction="vertical" :size="16" style="padding: 15px;" class="panel-space">
+              <div class="panel-caption">
+                <div >实验名称</div>
+                <div class="panel-caption panel-input-number">
+                  <a-input style="width: 150px;" :disabled="editSimName" v-model:value="parameterState.name"/>
+                  <FormOutlined @click="editSimName = false" style="cursor: pointer;" />
+                  <DeleteOutlined @click="delData(parameterState.id)" style="cursor: pointer;" />
+                </div>
+              </div>
+              <div class="panel-caption">
+                <div >创建时间</div>
+                <div class="panel-input-number">{{ parameterState.createTime }}</div>
+              </div>
+              <div class="panel-caption">
+                <div >仿真总时间</div>
+                <div style="display: flex;" class="panel-input-number">
+                  <a-input-number  v-model:value="parameterState.simulationTime" :min="1" />
+                  <a-select
+                    ref="select"
+                    v-model:value="parameterState.unit"
+                    style="width: 60px;margin-left: 10px;"
+                  >
+                    <a-select-option value="s">秒</a-select-option>
+                    <!-- <a-select-option value="lucy">分</a-select-option>
+                    <a-select-option value="lucy">时</a-select-option>
+                    <a-select-option value="lucy">天</a-select-option> -->
+                  </a-select>
+                </div>
+              </div>
+            </a-space>
 
             <a-collapse v-model:activeKey="systemCollapseKeys" expand-icon-position="end" class="panel-collapse-group">
               <a-collapse-panel key="strategy" header="资源调度参数">
@@ -88,6 +103,12 @@
                 <div class="panel-hint">如 particle 数量超过 5 个/片则抛出异常</div>
               </a-collapse-panel>
             </a-collapse>
+
+            <a-space style="justify-content: center;">
+              <a-button @click="handleRest()" >取消</a-button>
+              <a-button @click="addData" type="primary">保存</a-button>
+            </a-space>
+
           </div>
         </a-tab-pane>
 
@@ -105,6 +126,19 @@
                   <FormNumberField
                     label="晶圆盒容量"
                     v-model="parameterState.waferCassetteCapacity"
+                    :min="0"
+                    unit="层/盒"
+                  />
+                  <FormNumberField
+                    label="晶圆更换时间"
+                    v-model="parameterState.arrivalInterval"
+                    :min="0"
+                    unit="秒"
+                  />
+                  <FormNumberField
+                    label="晶圆原料总量"
+                    v-model="parameterState.waferCassetteCapacity"
+                    :disabled="parameterState.unlimitedWaferSupply"
                     :min="0"
                     unit="片"
                   />
@@ -474,7 +508,7 @@
 <script setup lang="ts">
 // @ts-nocheck
 import { onMounted, onBeforeUnmount, ref, reactive, watch, h } from "vue";
-import { PlusCircleOutlined } from '@ant-design/icons-vue';
+import { PlusCircleOutlined, FormOutlined, DeleteOutlined } from '@ant-design/icons-vue';
 import FormNumberField from '@/components/common/FormNumberField.vue';
 import FormRangeField from '@/components/common/FormRangeField.vue';
 import mapImage from "@/assets/images/map/map.png";
@@ -501,6 +535,7 @@ import { message } from 'ant-design-vue';
 import { createParameter, updateParameterById, getParameter, getParameterById, delParameterById } from '@/api/etching/parameter';
 import { createRuns } from '@/api/etching/runs';
 import { Etch } from '@/stores/etch';
+import dayjs from "dayjs";
 
 const props = defineProps<{
   param_key: any
@@ -514,6 +549,7 @@ const experimentOptions = ref([]);
 const parameterCollapseKeys = ref([]);
 const clickedCom = ref(null);
 const clickedTag = ref(null);
+const editSimName = ref(true);
 
 const overlays = [];
 let pointerMoveListenerKey = null;
@@ -538,11 +574,15 @@ const MIN_ZOOM = -1;
 const EXTENT_EXPANSION_RATIO = 1;
 
 const activeTab = ref("system");
-const systemCollapseKeys = ref(['strategy', 'capacity', 'alerts']);
+const systemCollapseKeys = ref([]);
 
 const parameterState = reactive({
+  id: '',
+  name: '',
+  createTime: '',
   arrivalInterval: 10,
-  simulationTime: 10000,
+  simulationTime: 1000,
+  unit: 's',
   armStrategy: "distance",
   chamberStrategy: "optimized",
   faultRetryLimit: 2,
@@ -974,7 +1014,67 @@ const addImageOverlay = ({ src, coordinate, size, opacity, positioning = "center
 
 const handleTag = (val) => {
   clickedTag.value = val;
+  parameterState.id = val;
+  editSimName.value = true;
   getDataById(val);
+}
+
+const handleRest = () => {
+  editSimName.value = true;
+  clickedTag.value = null;
+  parameterState.id = '';
+  parameterState.name = '';
+  parameterState.createTime = '';
+  parameterState.arrivalInterval = 10;
+  parameterState.simulationTime = 1000;
+  parameterState.unit = 's';
+  parameterState.armStrategy = "distance";
+  parameterState.chamberStrategy = "optimized";
+  parameterState.faultRetryLimit = 2;
+  parameterState.timeoutThreshold = 10;
+  parameterState.particleAlertThreshold = 5;
+  parameterState.waferCassetteCount = 4;
+  parameterState.waferCassetteCapacity = 1000;
+  parameterState.unlimitedWaferSupply = true;
+  parameterState.atmosphereArmCount = 1;
+  parameterState.atmosphereArmMode = "single";
+  parameterState.atmosphereTransferTimeRange = [10, 15];
+  parameterState.vacuumArmCount = 1;
+  parameterState.vacuumArmMode = "single";
+  parameterState.vacuumTransferTimeRange = [12, 18];
+  parameterState.edgeSeekTimeRange = [6, 9];
+  parameterState.edgeContinuousRunCount = 5;
+  parameterState.edgeCalibrationTimeRange = [4, 6];
+  parameterState.loadLockPumpDownTimeRange = [8, 12];
+  parameterState.loadLockVentTimeRange = [6, 9];
+  parameterState.loadLockUltimateVacuum = 5;
+  parameterState.loadLockPumpSpeed = 45;
+  parameterState.loadLockPressureHold = "";
+  parameterState.loadLockVentSpeed = 35;
+  parameterState.etchChamberCount = 6;
+  parameterState.etchChamberATimeRange = [60, 75];
+  parameterState.etchChamberBTimeRange = [60, 75];
+  parameterState.etchChamberCTimeRange = [60, 75];
+  parameterState.etchChamberDTimeRange = [60, 75];
+  parameterState.etchChamberETimeRange = [60, 75];
+  parameterState.etchChamberFTimeRange = [60, 75];
+  parameterState.etchWorkingVacuumRange = [3, 5];
+  parameterState.etchPumpSpeedRange = [500, 600];
+  parameterState.rfPowerRange = [500, 700];
+  parameterState.rfFrequency = 13;
+  parameterState.biasPowerRange = [100, 150];
+  parameterState.etchGasTypeCount = 3;
+  parameterState.gasFlowControlAccuracy = 1;
+  parameterState.gasMixRatio = 50;
+  parameterState.waferChuckTemperatureRange = [180, 220];
+  parameterState.chamberWallTemperatureRange = [120, 150];
+  parameterState.cleaningChamberCount = 2;
+  parameterState.cleaningTimeRange = [20, 25];
+  parameterState.cleaningPowerRange = [500, 600];
+  parameterState.cleaningGasFlowRange = [50, 80];
+  parameterState.dryCleanCycleCount = 3;
+  parameterState.dryingTimeRange = [15, 20];
+  parameterState.dryingGasPressureRange = [1, 2];
 }
 
 // ----------------------------------------------- 接口调用 -----------------------------------------
@@ -989,6 +1089,8 @@ const getData = async () => {
 const getDataById = async (id) => {
   const data = await getParameterById(id);
   if (data) {
+    parameterState.name = data.name;
+    parameterState.createTime = dayjs(data.created_at).format('YYYY-MM-DD HH:mm:ss');
     data.values.forEach(t => {
       const item = parameterObj.find(obj => obj.key === t.param_key);
       if(item) {
@@ -1036,9 +1138,9 @@ const addData = async () => {
     }
   }
   let res = null;
-    if (clickedTag.value) {
+  if (clickedTag.value) {
     name = (experimentOptions.value || []).find(t => t.value === clickedTag.value)?.label;
-    param.name = name;
+    param.name = parameterState.name;
     res = await updateParameterById(clickedTag.value, param);
   } else {
     res = await createParameter(param);
@@ -1050,6 +1152,7 @@ const addData = async () => {
       name: name
     });
     getData();
+    handleTag(res.id);
     message.success('保存成功！')
     console.log('保存' + name)
   }
@@ -1058,6 +1161,7 @@ const addData = async () => {
 const delData = async (id) => {
   await delParameterById(id);
   getData();
+  handleRest();
   message.success('删除成功！')
   console.log('删除' + id)
 }

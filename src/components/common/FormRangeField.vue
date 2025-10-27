@@ -120,4 +120,19 @@ const sliderStyle = computed(() => ({
 .panel-range-slider {
   margin-top: 8px;
 }
+
+:deep(.ant-slider-horizontal .ant-slider-handle) {
+  inset-block-start: 3px;
+}
+
+:deep(.ant-slider .ant-slider-handle::before) {
+  width: 8px;
+  height: 8px;
+}
+
+:deep(.ant-slider .ant-slider-handle::after) {
+  width: 6px;
+  height: 6px;
+}
+
 </style>

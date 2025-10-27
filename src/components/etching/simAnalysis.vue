@@ -125,7 +125,7 @@ const getData = async () => {
   data.forEach(t => {
     const obj = items.find(v => v.parameter_set_id === t.id);
     if(obj) {
-      arr.push(obj);
+      arr.push({ ...obj, name: t.name });
     }
   })
   simulators.value = arr.map(t => {

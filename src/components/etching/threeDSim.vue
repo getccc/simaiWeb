@@ -14,19 +14,20 @@
         </template>
 
         <div class="panel-controls">
-          <div class="panel-controls-left">
+          <!-- <div class="panel-controls-left">
             <CaretRightOutlined v-if="!helpersParams.isAnimation" @click="handleSimStart" />
             <PauseOutlined v-else @click="handleSimStop" />
             <StopOutlined @click="resetEventLog" />
-          </div>
+          </div> -->
           <a-select
             v-model:value="selectedSim"
             :options="simOptions"
             size="small"
             style="min-width: 150px"
+            @change="handleSimStart"
           />
         </div>
-        <div class="panel-table">
+        <div class="panel-table" ref="panelTableRef">
           <a-table
             size="small"
             :columns="eventColumns"
@@ -114,7 +115,7 @@
 </template>
 
 <script setup>
-import { onMounted, onBeforeUnmount, ref, reactive, nextTick, computed } from "vue";
+import { onMounted, onBeforeUnmount, ref, reactive, nextTick, computed, watch } from "vue";
 import { CaretRightOutlined, PauseOutlined, PlusCircleOutlined, MinusCircleOutlined, ForwardOutlined, StopOutlined } from "@ant-design/icons-vue";
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
@@ -131,6 +132,8 @@ const selectedAnimation = ref(-1);
 
 let renderer, scene, camera, controls, target;
 let model = null;
+let resizeObserver = null;
+let handleResize = null;
 
 let raycaster, mouse, groundPlane, clickMarker;
 let m2Ref = null;
@@ -147,7 +150,7 @@ const timelineState = reactive({
 });
 
 // 将仿真分钟映射为秒（例如 1 分钟 -> 6 秒）
-const SIM_TIME_UNIT = 10;
+const SIM_TIME_UNIT = 15;
 
 const helpersParams = reactive({
   isTransparent: false,
@@ -190,6 +193,7 @@ const eventColumns = [
 ];
 
 const eventRows = ref([]);
+const panelTableRef = ref(null);
 const animateRows = ref([]);
 
 const simOperationState = reactive({ starting: false });
@@ -212,23 +216,128 @@ const simConfig = reactive({
 });
 
 const presetTargets = {
-  A0: new THREE.Vector3(150, 52, 90),
-  A1: new THREE.Vector3(150, 52, 90),
-  A2: new THREE.Vector3(150, 52, 40),
-  A3: new THREE.Vector3(150, 52, -10),
-  A4: new THREE.Vector3(150, 52, -60),
+  A0: new THREE.Vector3(149, 54, 83),
+  A1: new THREE.Vector3(149, 54, 83),
+  A2: new THREE.Vector3(149, 54, 32),
+  A3: new THREE.Vector3(149, 54, -18),
+  A4: new THREE.Vector3(149, 54, -70),  
   E0: new THREE.Vector3(0, 0, 0),
-  E1: new THREE.Vector3(0, -Math.PI*0.6, 0),
-  E2: new THREE.Vector3(0, -Math.PI*0.9, 0),
-  E3: new THREE.Vector3(0, -Math.PI*1.1, 0),
-  E4: new THREE.Vector3(0, -Math.PI*1.4, 0),
-  E5: new THREE.Vector3(0, -Math.PI*1.6, 0),
-  E6: new THREE.Vector3(0, -Math.PI*1.9, 0),
-  F1: new THREE.Vector3(0, -Math.PI*0.4, 0),
-  F2: new THREE.Vector3(0, -0.2, 0),
+  E1: new THREE.Vector3(0, -Math.PI*0.4, 0),
+  E2: new THREE.Vector3(0, -Math.PI*0.6, 0),
+  E3: new THREE.Vector3(0, -Math.PI*0.9, 0),
+  E4: new THREE.Vector3(0, -Math.PI*1.1, 0),
+  E5: new THREE.Vector3(0, -Math.PI*1.4, 0),
+  E6: new THREE.Vector3(0, -Math.PI*1.6, 0),
+  F1: new THREE.Vector3(0, -Math.PI*0.15, 0),
+  F2: new THREE.Vector3(0, -Math.PI*1.85, 0),
+}
+const locateMap = {
+  'arm1-1': {
+    name: 'ICP374',
+    offset: { x: 149, y: 91.6, z: 27}
+  },
+  'arm1-2': {
+    name: 'ICP370',
+    offset: { x: 149, y: 90.2, z: 27}
+  },
+  'arm2-1': {
+    name: '对象103',
+    offset: { x: 66, y: 0, z: 0}
+  },
+  'arm2-2': {
+    name: '对象104',
+    offset: { x: 66, y: 2, z: 0}
+  },
+  'aligner': {
+    name: 'ICP313',
+    offset: { x: 0, y: 8, z: -5}
+  },
+  'loadLock': {
+    name: '对齐002',
+    offset: { x: 0, y: 2, z: 0}
+  },
+  'etch1': {
+    name: 'glass',
+    offset: { x: 0, y: -10, z: 0}
+  },
+  'etch2': {
+    name: 'glass001',
+    offset: { x: 0, y: -10, z: 0}
+  },
+  'etch3': {
+    name: 'glass002',
+    offset: { x: 0, y: -10, z: 0}
+  },
+  'etch4': {
+    name: 'glass003',
+    offset: { x: 0, y: -10, z: 0}
+  },
+  'etch5': {
+    name: 'glass004',
+    offset: { x: 0, y: -10, z: 0}
+  },
+  'etch6': {
+    name: 'glass005',
+    offset: { x: 0, y: -10, z: 0}
+  },
+  'clean1': {
+    name: '对齐001',
+    offset: { x: 0, y: 2, z: 0}
+  },
+  'clean2': {
+    name: '对齐',
+    offset: { x: 0, y: 2, z: 0}
+  },
+  'waferBox': {
+    name: '对象016',
+    offset: { x: 205, y: 111, z: 35}
+  },
+}
+let modelArr = ['Group012', 'Group015', 'Group018', '组003', '组004', '组022', '组007', '组025', 'a', 'b', 'c', 'ICP34', 'ICP363', 'ICP347', 'ICP359', 'ICP343', 'ICP361', 'ICP360', 'ICP351', 'ICP350', 'ICP315', 'ICP362', 'ICP332', 'ICP353'];
+let transArr = [ 
+{ name: 'ICP05', transparent: 0.8 }, 
+{ name: 'ICP805', transparent: 0.8 },
+{ name: 'ICP827', transparent: 0.8 },
+{ name: 'ICP849', transparent: 0.8 },
+{ name: 'ICP250', transparent: 0.2 },
+{ name: 'glass', transparent: 0.2 },
+{ name: 'glass001', transparent: 0.2 },
+{ name: 'glass002', transparent: 0.2 },
+{ name: 'glass003', transparent: 0.2 },
+{ name: 'glass004', transparent: 0.2 },
+{ name: 'glass005', transparent: 0.2 },
+{ name: 'ICP294', transparent: 0.6 },
+{ name: 'ICP357', transparent: 0.6 },
+{ name: 'ICP312', transparent: 0.6 },
+{ name: 'ICP316', transparent: 0.6 },
+{ name: 'ICP348', transparent: 0.6 },
+{ name: 'ICP295', transparent: 0.6 }]
+
+let wafer = 'ICP992';
+let waferModel = null;
+let wafersMap = {};
+const skins = {
+  pre:   '/img/wafer/pre.png',
+  etch:  '/img/wafer/etch.png',
+  ready: '/img/wafer/ready.png'
+};
+
+// Clean API to change wafer skin at runtime
+function changeWaferSkin(key) {
+  if (!waferModel) {
+    console.warn('[changeWaferSkin] waferModel not available yet');
+    return;
+  }
+  const url = skins[key];
+  if (!url) {
+    console.warn('[changeWaferSkin] unknown skin key:', key);
+    return;
+  }
+  setSkin(waferModel, url);
 }
 
-let modelArr = ['Group012', 'Group015', 'Group018', '组003', '组004', '组022', '组007', '组025', 'a', 'b', 'c', 'ICP34', 'ICP363'];
+// Optional: expose a convenience function in development for quick switching
+if (typeof window !== 'undefined') window.changeWaferSkin = changeWaferSkin;
 
 // ----------------------------------------------- 接口调用 -------------------------------------------------------
 const getData = async () => {
@@ -239,18 +348,53 @@ const getData = async () => {
   data.forEach(t => {
     const obj = items.find(v => v.parameter_set_id === t.id);
     if(obj) {
-      arr.push(obj);
+      arr.push({ ...obj, name: t.name });
     }
   })
   simOptions.value = arr.map(t => { return { label: t.name, value: t.id } })
+  selectedSim.value = arr[0].id;
+  handleSimStart()
 }
 
 onMounted(async () => {
+  getData();
   init();
-  await loadModel('/model/AMEC10/AMEC.gltf')
+  // await loadModel('/model/AMEC10/AMEC.gltf')
+  await loadModel('/model/icp/icp.gltf')
+  await loadModel('/model/yuanpian/yuanpian1.gltf')
   initializeControls()
   animate();
-  getData()
+});
+
+// 自动滚动表格以高亮当前选中的动画行
+watch(selectedAnimation, async (newIndex) => {
+  // 当没有选中或索引为 -1 时不滚动
+  if (typeof newIndex !== 'number' || newIndex < 0) return;
+  // 等待 DOM 更新后查找行元素
+  await nextTick();
+  try {
+    const containerEl = panelTableRef.value || document.querySelector('.panel-table');
+    if (!containerEl) return;
+
+    // Ant Design Vue 的可滚动表体通常在 .ant-table-body 内
+    const body = containerEl.querySelector('.ant-table-body') || containerEl.querySelector('tbody');
+    if (!body) return;
+
+    // 查找所有行（tr）并定位到索引位置
+    const rows = body.querySelectorAll('tr');
+    if (!rows || rows.length === 0) return;
+
+    // Clamp index
+    const idx = Math.max(0, Math.min(rows.length - 1, newIndex));
+    const targetRow = rows[idx];
+    if (!targetRow) return;
+
+    // 平滑滚动目标行进入视口中央
+    targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  } catch (e) {
+    // 容忍任何错误
+    console.warn('[panel scroll] failed', e);
+  }
 });
 
 function init() {
@@ -266,12 +410,48 @@ function init() {
   camera.position.set(8, 8, 8);
 
   renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  // Use the container size (not the full window) so the canvas fits the layout
+  const rect = container.value ? container.value.getBoundingClientRect() : { width: window.innerWidth, height: window.innerHeight };
+  const width = Math.max(1, Math.floor(rect.width));
+  const height = Math.max(1, Math.floor(rect.height));
+  renderer.setSize(width, height);
+  // Respect devicePixelRatio but cap it for performance
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   // 色彩与色调映射设置
   renderer.outputColorSpace = THREE.SRGBColorSpace
   renderer.toneMapping = THREE.ACESFilmicToneMapping
   renderer.toneMappingExposure = 2
   container.value.appendChild(renderer.domElement);
+
+  // Ensure renderer and camera use the correct size if the container is resized
+  handleResize = function () {
+    if (!container.value || !renderer || !camera) return;
+    const r = container.value.getBoundingClientRect();
+    const w = Math.max(1, Math.floor(r.width));
+    const h = Math.max(1, Math.floor(r.height));
+    // compare element CSS size (clientWidth/Height) to avoid unnecessary updates
+    const el = renderer.domElement;
+    if (el.clientWidth === w && el.clientHeight === h) return;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  };
+
+  // Initial size adjustment (in case CSS/layout changed after mount)
+  // Use nextTick to be safe when called from onMounted
+  try { handleResize(); } catch (e) { /* ignore */ }
+
+  // Use ResizeObserver for the container (more reliable for layout changes)
+  if (typeof ResizeObserver !== 'undefined' && container.value) {
+    resizeObserver = new ResizeObserver(() => {
+      handleResize();
+    });
+    resizeObserver.observe(container.value);
+  }
+
+  // Fallback: listen to window resize as well
+  window.addEventListener('resize', handleResize, { passive: true });
 
   controls = new OrbitControls(camera, renderer.domElement);
 
@@ -313,6 +493,84 @@ function init() {
 }
 
 // --------------------------------------- 模型加载 ---------------------------------------
+function setSkin(model, url) {
+  if (!model) {
+    console.warn('[setSkin] model is null or undefined for url:', url);
+    return;
+  }
+
+  const loader = new THREE.TextureLoader();
+  loader.load(
+    url,
+    (tex) => {
+      try {
+        // Support both older (encoding) and newer (colorSpace) APIs
+        if (typeof tex.encoding !== 'undefined' && typeof THREE.sRGBEncoding !== 'undefined') {
+          tex.encoding = THREE.sRGBEncoding;
+        } else if (typeof tex.colorSpace !== 'undefined' && typeof THREE.SRGBColorSpace !== 'undefined') {
+          tex.colorSpace = THREE.SRGBColorSpace;
+        }
+        tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(1, 1);
+        const maxAniso = renderer?.capabilities?.getMaxAnisotropy?.() ?? 1;
+        if (typeof tex.anisotropy !== 'undefined') tex.anisotropy = maxAniso;
+
+        let updated = 0;
+        model.traverse((o) => {
+          if (o.isMesh && o.material) {
+            // Ensure mesh has its own material instance to avoid shared-material side effects
+            try { ensureUniqueMaterial(o); } catch (e) { /* ignore */ }
+
+            const geomHasUV = !!(o.geometry && o.geometry.attributes && o.geometry.attributes.uv);
+            const mats = Array.isArray(o.material) ? o.material : [o.material];
+            mats.forEach((m) => {
+              try {
+                m.map = tex;
+                // Make sure albedo map is visible: reset color and PBR params if present
+                try {
+                  if (m.color && typeof m.color.setHex === 'function') m.color.setHex(0xffffff);
+                  if (typeof m.metalness !== 'undefined') m.metalness = 0;
+                  if (typeof m.roughness !== 'undefined') m.roughness = 1;
+                } catch (e) {
+                  // ignore
+                }
+                m.needsUpdate = true;
+                updated++;
+              } catch (e) {
+                console.warn('[setSkin] failed to set map on material', e, m);
+              }
+            });
+          }
+        });
+        console.log(`[setSkin] applied texture ${url} to ${updated} material(s) on model`, model.name || model);
+      } catch (e) {
+        console.error('[setSkin] error applying texture', e);
+      }
+    },
+    undefined,
+    (err) => {
+      console.error('[setSkin] texture load error for', url, err);
+    }
+  );
+}
+
+// Try to locate wafer object in scene by several heuristics when exact name fails
+function findWaferInScene() {
+  if (!scene) return null;
+  let obj = scene.getObjectByName(wafer);
+  if (obj) return obj;
+  let found = null;
+  scene.traverse((o) => {
+    if (found) return;
+    if (o.name && /wafer/i.test(o.name)) found = o;
+    if (!found && o.name && wafer && o.name.includes(wafer)) found = o;
+    if (!found && o.name && /^ICP\d{2,}/i.test(o.name)) found = o;
+  });
+  if (found) console.warn('[findWaferInScene] wafer found by heuristic:', found.name);
+  else console.warn('[findWaferInScene] wafer not found in scene with heuristics');
+  return found;
+}
+
 async function loadModel(url) {
   const loader = new GLTFLoader()
   try {
@@ -341,7 +599,6 @@ async function loadModel(url) {
     controls.target.set( -0.856, 1.575, -0.981)
     controls.update()
     
-    console.log('模型加载完成，相机位置:', camera.position.toArray())
   } catch (error) {
     console.error('模型加载失败:', error)
   }
@@ -389,8 +646,28 @@ function onPointerClick(event) {
 
 function initializeControls() {
   timeLine = gsap.timeline()
-  const m2 = scene.getObjectByName('jixiebi2');
+  const m2 = scene.getObjectByName('ICP375');
   m2Ref = m2
+  waferModel = scene.getObjectByName(wafer);
+  if (!waferModel) {
+    console.warn('[initializeControls] waferModel not found by name:', wafer, '— trying heuristics');
+    waferModel = findWaferInScene();
+  }
+  if (!waferModel) {
+    console.warn('[initializeControls] waferModel still not found; skipping setSkin');
+  } else {
+    waferModel.visible = false;
+    setSkin(waferModel, skins.pre);
+  }
+
+  transArr.forEach(t => {
+    const tranModel = scene.getObjectByName(t.name);
+    tranModel.traverse(child => {
+      if (child.isMesh && child.material) {
+        applyMaterialTransparency(child.material, true, t.transparent)
+      }
+    })
+  })
 }
 
 // 记录材质原始状态（属性级），可用于无需克隆的场景
@@ -534,7 +811,7 @@ function onPresetChange(key, { duration = 1, absolutetime = null }) {
   const dur = duration * 0.8
   if (target && m3) {
     moveM2To(target, dur, absolutetime)
-    gsapRotation(timeLine, m3, { x: 0, y: 0, z: 0 }, duration * 0.2, absolutetime + dur)
+    gsapRotation(timeLine, m3, { x: 0, y: -Math.PI / 2, z: 0 }, duration * 0.2, absolutetime + dur)
   }
 }
 
@@ -551,9 +828,9 @@ function onWorkChange(key, { duration = 1, absolutetime = null }) {
 function onFixedClick({ duration = 1, absolutetime = null }) {
   const m3 = scene.getObjectByName('ICP375');
   const dur = duration * 0.8
-  moveM2To(new THREE.Vector3(150, 52, 90), dur, absolutetime)
+  moveM2To(new THREE.Vector3(149, 54, 83), dur, absolutetime)
   if (m3) {
-    gsapRotation(timeLine, m3, { x: 0, y: Math.PI * 3/2, z: 0 }, duration * 0.2, absolutetime + dur)
+    gsapRotation(timeLine, m3, { x: 0, y: Math.PI, z: 0 }, duration * 0.2, absolutetime + dur)
   }
 }
 
@@ -561,39 +838,142 @@ function onFixedClick({ duration = 1, absolutetime = null }) {
 function onSampleClick({ duration = 1, absolutetime = null }) {
   const m3 = scene.getObjectByName('ICP375');
   const dur = duration * 0.8
-  moveM2To(new THREE.Vector3(150, 52, 15), dur, absolutetime)
+  moveM2To(new THREE.Vector3(149, 54, 8), dur, absolutetime)
   if (m3) {
-    gsapRotation(timeLine, m3, { x: 0, y: Math.PI, z: 0 }, duration * 0.2, absolutetime + dur)
+    gsapRotation(timeLine, m3, { x: 0, y: Math.PI / 2, z: 0 }, duration * 0.2, absolutetime + dur)
   }
 }
 
 // 机械臂1伸缩
-function onArm1Change(key, { duration = 1, absolutetime = null, onComplete = null }) {
+function onArm1Change(key, { duration = 1, absolutetime = null, onComplete = null }, wafer_id) {
   const m4 = scene.getObjectByName('ICP372');
   const m5 = scene.getObjectByName('ICP371');
   const m7 = scene.getObjectByName('ICP368');
   const m8 = scene.getObjectByName('ICP367');
+
+  const arm_pos = scene.getObjectByName('ICP375');
+  const arm4 = scene.getObjectByName('ICP374');
+  const arm5 = scene.getObjectByName('ICP370');
+  const aligner = scene.getObjectByName('ICP313');
+  const loadLock = scene.getObjectByName('对齐002');
+  // wafer_id && console.log(key, wafer_id)
   
   if (key === '机械臂1伸出') {
     controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, onComplete)
+  } else if (key === '机械臂1伸出带货') {
+    controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, () => {
+      const model = waferModel.clone();
+      model.name = `wafer-${wafer_id}`;
+      wafersMap[wafer_id] = model;
+      const pos = locateMap['arm1-1'].offset;
+      addWafer(model, arm4, pos.x, pos.y, pos.z);
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出放定位点') {
+    controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      attachPreserveWorld(model, arm4, 'aligner');
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出定位点取货') {
+    controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      attachPreserveWorld(model, aligner, 'arm1-1');
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出放真空仓') {
+    controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      attachPreserveWorld(model, arm4, 'loadLock');
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出真空仓取') {
+    controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      attachPreserveWorld(model, loadLock, 'arm1-1');
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出晶圆仓放货') {
+    controlArm(timeLine, m4, m5, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      attachPreserveWorld(model, arm4, 'waferBox');
+      onComplete && onComplete();
+    })
   } else if (key === '机械臂1收回') {
     controlArm(timeLine, m4, m5, 'retract', duration, absolutetime, onComplete)
   } else if (key === '机械臂2伸出') {
     controlArm(timeLine, m8, m7, 'extend', duration, absolutetime, onComplete)
+  } else if (key === '机械臂2伸出带货') {
+    controlArm(timeLine, m8, m7, 'extend', duration, absolutetime, () => {
+      const pos = arm_pos.position;
+      const model = waferModel.clone();
+      model.name = `wafer-${wafer_id}`;
+      wafersMap[wafer_id] = model;
+      addWafer(model, arm5, 0 + pos.x, 36.2  + pos.y, -5  + pos.z);
+      onComplete && onComplete();
+    })
   } else if (key === '机械臂2收回') {
     controlArm(timeLine, m8, m7, 'retract', duration, absolutetime, onComplete)
   }
 }
 
 // 机械臂2伸缩
-function onArm2Change(key, { duration = 1, absolutetime = null }) {
+function onArm2Change(key, { duration = 1, absolutetime = null, onComplete = null }, wafer_id, each_id) {
   const m10 = scene.getObjectByName('hand_A05');
   const m11 = scene.getObjectByName('hand_A00');
   const m13 = scene.getObjectByName('hand_A02');
   const m14 = scene.getObjectByName('hand_A03');
+
+  const armL = scene.getObjectByName('对象103');
+  const armR = scene.getObjectByName('对象104');
+
+  const loadLock = scene.getObjectByName('对齐002');
+  wafer_id && console.log(key, wafer_id, `etch${each_id}`)
   
   if (key === '机械臂1伸出') {
     controlArm(timeLine, m10, m11, 'extend', duration, absolutetime)
+  } else if (key === '机械臂1伸出真空仓取货') {
+    controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      setSkin(model, skins.etch);
+      attachPreserveWorld(model, loadLock, 'arm2-1');
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出蚀刻室放货') {
+    controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      attachPreserveWorld(model, armL, `etch${each_id}`);
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出蚀刻室取货') {
+    controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      setSkin(model, skins.ready);
+      const obj = locateMap[`etch${each_id}`]
+      const eachModel = scene.getObjectByName(obj.name)
+      attachPreserveWorld(model, eachModel, 'arm2-1');
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出清洗仓放货') {
+    controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      attachPreserveWorld(model, armL, `clean${each_id}`);
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出清洗仓取货') {
+    controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      const obj = locateMap[`clean${each_id}`]
+      const cleanModel = scene.getObjectByName(obj.name)
+      attachPreserveWorld(model, cleanModel, 'arm2-1');
+      onComplete && onComplete();
+    })
+  } else if (key === '机械臂1伸出真空仓放货') {
+    controlArm(timeLine, m10, m11, 'extend', duration, absolutetime, () => {
+      model = wafersMap[wafer_id];
+      attachPreserveWorld(model, armL, 'loadLock');
+      onComplete && onComplete();
+    })
   } else if (key === '机械臂1收回') {
     controlArm(timeLine, m10, m11, 'retract', duration, absolutetime)
   } else if (key === '机械臂2伸出') {
@@ -606,7 +986,7 @@ function onArm2Change(key, { duration = 1, absolutetime = null }) {
 // 移动
 function moveM2To(targetVec3, duration = 1, absolutetime = null) {
   if (!m2Ref || !targetVec3) return
-  console.log(`${absolutetime}: move`, duration)
+  // console.log(`${absolutetime}: move`, duration)
   timeLine.to(m2Ref.position, {
     x: targetVec3.x,
     y: targetVec3.y,
@@ -618,7 +998,7 @@ function moveM2To(targetVec3, duration = 1, absolutetime = null) {
 
 // 旋转
 function gsapRotation(timeLine, model, target, duration = 1, absolutetime = null, onComplete = null) {
-  console.log(`${absolutetime}: rot`, duration)
+  // console.log(`${absolutetime}: rot`, duration)
   timeLine.to(model.rotation, {
     x: target.x,
     y: target.y,
@@ -639,36 +1019,106 @@ function controlArm(timeLine, arm1, arm2, action, duration = 1, absolutetime = n
     roatateY1 = -Math.PI/2
     roatateY2 = Math.PI/2
   }
-  gsapRotation(timeLine, arm1, { x: 0, y: roatateY1, z: 0 }, duration, absolutetime)
-  gsapRotation(timeLine, arm2, { x: 0, y: roatateY2, z: 0 }, duration, absolutetime, onComplete)
+  gsapRotation(timeLine, arm1, { x: arm1.rotation.x, y: roatateY1, z: arm1.rotation.z }, duration, absolutetime)
+  gsapRotation(timeLine, arm2, { x: arm2.rotation.x, y: roatateY2, z: arm2.rotation.z }, duration, absolutetime, onComplete)
+}
+
+function addWafer(child, newParent, offsetX, offsetY, offsetZ) {
+  const pos = child.position;
+  const modelPos = { x: pos.x + offsetX, y: pos.y + offsetY, z: pos.z + offsetZ };
+  newParent.add(child);
+  child.position.set(modelPos.x, modelPos.y, modelPos.z);
+  child.visible = true;
+}
+
+function attachPreserveWorld(child, newParent, locateId) {
+  const obj = locateMap[locateId];
+  const box = scene.getObjectByName(obj.name);
+  newParent.remove(child);
+  child.position.set(0,0,0)
+  const pos = obj.offset;
+  addWafer(child, box, pos.x, pos.y, pos.z);
 }
 
 // 机械臂控制
-function onArmChange(key, { duration = 1, absolutetime = null, onComplete = null }) {
+function onArmChange(key, { duration = 1, absolutetime = null, onComplete = null }, wafer_id = null, each_id = null) {
   const time2 = absolutetime + duration
   const time3 = time2 + duration
   const time4 = time3 + duration
-  if (key === 1) {
-    onArm1Change('机械臂1伸出', { duration, absolutetime }) // 机械臂伸出
+  const time5 = time4 + duration
+  const time6 = time5 + duration
+  const time7 = time6 + duration
+  const time8 = time7 + duration
+  if (key === 1) { // 晶圆盒取货
+    onArm1Change('机械臂1伸出带货', { duration, absolutetime }, wafer_id) // 机械臂伸出
     onArm1Change('机械臂1收回', { duration, absolutetime: time2}) // 机械臂收回
-    onArm1Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
-    onArm1Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+    // onArm1Change('机械臂2伸出带货', { duration, absolutetime: time3 }, `${wafer_id}-1`) // 机械臂伸出
+    // onArm1Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
   }
-  if (key === 2) {
-    onArm1Change('机械臂1伸出', { duration, absolutetime }) // 机械臂伸出
+  if (key === 2) { // 定位点
+    onArm1Change('机械臂1伸出放定位点', { duration, absolutetime }, wafer_id) // 机械臂伸出
     onArm1Change('机械臂1收回', { duration, absolutetime: time2, onComplete }) // 机械臂收回
-    // onArm1Change('机械臂1伸出') // 机械臂伸出
-    // onArm1Change('机械臂1收回') // 机械臂收回
-    // onArm1Change('机械臂2伸出') // 机械臂伸出
-    // onArm1Change('机械臂2收回') // 机械臂收回
-    onArm1Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
-    onArm1Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+    onArm1Change('机械臂1伸出定位点取货', { duration, absolutetime: time3 }, wafer_id) // 机械臂伸出
+    onArm1Change('机械臂1收回', { duration, absolutetime: time4 }) // 机械臂收回
+
+    // onArm1Change('机械臂2伸出', { duration, absolutetime: time5 }, wafer_id) // 机械臂伸出
+    // onArm1Change('机械臂2收回', { duration, absolutetime: time6 }) // 机械臂收回
+    // onArm1Change('机械臂2伸出', { duration, absolutetime: time7 }) // 机械臂伸出
+    // onArm1Change('机械臂2收回', { duration, absolutetime: time8, onComplete }) // 机械臂收回
   }
-  if (key === 3) {
-    onArm2Change('机械臂1伸出', { duration, absolutetime }) // 机械臂伸出
+  if (key === 3) { // 真空机械臂 真空仓取货
+    onArm2Change('机械臂1伸出真空仓取货', { duration, absolutetime }, wafer_id) // 机械臂伸出
     onArm2Change('机械臂1收回', { duration, absolutetime: time2 }) // 机械臂收回
-    onArm2Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
-    onArm2Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+    // onArm2Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
+    // onArm2Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+  }
+  if (key === 4) { // 真空仓放货
+    onArm1Change('机械臂1伸出放真空仓', { duration, absolutetime }, wafer_id) // 机械臂伸出
+    onArm1Change('机械臂1收回', { duration, absolutetime: time2, onComplete }) // 机械臂收回
+    // onArm1Change('机械臂2伸出', { duration, absolutetime: time4 }) // 机械臂伸出
+    // onArm1Change('机械臂2收回', { duration, absolutetime: time5, onComplete }) // 机械臂收回
+  }
+  if (key === 5) { // 真空机械臂 蚀刻室放货
+    onArm2Change('机械臂1伸出蚀刻室放货', { duration, absolutetime }, wafer_id, each_id) // 机械臂伸出
+    onArm2Change('机械臂1收回', { duration, absolutetime: time2 }) // 机械臂收回
+    // onArm2Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
+    // onArm2Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+  }
+  if (key === 6) { // 真空机械臂 蚀刻室取货
+    onArm2Change('机械臂1伸出蚀刻室取货', { duration, absolutetime }, wafer_id, each_id) // 机械臂伸出
+    onArm2Change('机械臂1收回', { duration, absolutetime: time2 }) // 机械臂收回
+    // onArm2Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
+    // onArm2Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+  }
+  if (key === 7) { // 真空机械臂 清洗仓放货
+    onArm2Change('机械臂1伸出清洗仓放货', { duration, absolutetime }, wafer_id, each_id) // 机械臂伸出
+    onArm2Change('机械臂1收回', { duration, absolutetime: time2 }) // 机械臂收回
+    // onArm2Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
+    // onArm2Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+  }
+   if (key === 8) { // 真空机械臂 清洗仓取货
+    onArm2Change('机械臂1伸出清洗仓取货', { duration, absolutetime }, wafer_id, each_id) // 机械臂伸出
+    onArm2Change('机械臂1收回', { duration, absolutetime: time2 }) // 机械臂收回
+    // onArm2Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
+    // onArm2Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+  }
+   if (key === 9) { // 真空机械臂 真空室放货
+    onArm2Change('机械臂1伸出真空仓放货', { duration, absolutetime }, wafer_id, each_id) // 机械臂伸出
+    onArm2Change('机械臂1收回', { duration, absolutetime: time2 }) // 机械臂收回
+    // onArm2Change('机械臂2伸出', { duration, absolutetime: time3 }) // 机械臂伸出
+    // onArm2Change('机械臂2收回', { duration, absolutetime: time4, onComplete }) // 机械臂收回
+  }
+  if (key === 10) { // 大气机械臂 真空仓取货
+    onArm1Change('机械臂1伸出真空仓取', { duration, absolutetime }, wafer_id) // 机械臂伸出
+    onArm1Change('机械臂1收回', { duration, absolutetime: time2, onComplete }) // 机械臂收回
+    // onArm1Change('机械臂2伸出', { duration, absolutetime: time4 }) // 机械臂伸出
+    // onArm1Change('机械臂2收回', { duration, absolutetime: time5, onComplete }) // 机械臂收回
+  }
+  if (key === 11) { // 大气机械臂 真空仓取货
+    onArm1Change('机械臂1伸出晶圆仓放货', { duration, absolutetime }, wafer_id) // 机械臂伸出
+    onArm1Change('机械臂1收回', { duration, absolutetime: time2, onComplete }) // 机械臂收回
+    // onArm1Change('机械臂2伸出', { duration, absolutetime: time4 }) // 机械臂伸出
+    // onArm1Change('机械臂2收回', { duration, absolutetime: time5, onComplete }) // 机械臂收回
   }
 }
 
@@ -800,14 +1250,9 @@ function simAnimation(data) {
   sorted.forEach((item, index) => {
     const type = item.event_type;
     const system_type = item.system_type
+    const wafer_id = item.wafer_id;
     const sim_time = Number(Number(item.sim_time * SIM_TIME_UNIT || 0).toFixed(2))
     const duration_estimate = Number(Number(item.duration_estimate * SIM_TIME_UNIT || 0).toFixed(2))
-
-    // 在时间线上插入与仿真时间差对应的空白段
-    // const gap = Math.max(0, sim_time - lastSimTime)
-    // if (gap > 0) {
-    //   timeLine.to({}, { duration: gap })
-    // }
 
     if (type === 'transfer_start' && system_type === 'atmospheric') {
       const from = item.from_location || ''
@@ -816,22 +1261,22 @@ function simAnimation(data) {
         const pos = from.split(':')[0].split('Cassette ')[1]
         const duration1 = (duration_estimate - 4) / 2  // 将动作总时间分成各个步骤所需的时间
         onPresetChange(`A${pos}`, { duration: duration1, absolutetime: sim_time })
-        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration1 })
+        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration1 }, wafer_id)
         onFixedClick({ duration: duration1, absolutetime: sim_time + duration1 + 2 })
-        onArmChange(2, { duration: 0.5, absolutetime: sim_time + duration_estimate - 2, onComplete: () => { selectedAnimation.value = index } })
+        onArmChange(2, { duration: 0.5, absolutetime: sim_time + duration_estimate - 2, onComplete: () => { selectedAnimation.value = index } }, wafer_id)
       }
       if (to === "LoadLock") {
         const duration2 = duration_estimate - 2
         onSampleClick({ duration: duration2, absolutetime: sim_time })
-        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration2, onComplete: () => { selectedAnimation.value = index } })
+        onArmChange(4, { duration: 0.5, absolutetime: sim_time + duration2, onComplete: () => { selectedAnimation.value = index } }, wafer_id)
       }
       if (to.includes("Cassette")) {
         const duration3 = (duration_estimate - 4) / 2  // 将动作总时间分成各个步骤所需的时间
         onSampleClick({ duration: duration3, absolutetime: sim_time })
-        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration3 })
+        onArmChange(10, { duration: 0.5, absolutetime: sim_time + duration3 }, wafer_id)
         const pos = to.split(':')[0].split('Cassette ')[1]
         onPresetChange(`A${pos}`, { duration: duration3, absolutetime: sim_time + duration3 + 2 })
-        onArmChange(1, { duration: 0.5, absolutetime: sim_time + duration3 - 2, onComplete: () => { selectedAnimation.value = index } })
+        onArmChange(11, { duration: 0.5, absolutetime: sim_time + duration3 - 2, onComplete: () => { selectedAnimation.value = index } }, wafer_id)
       }
     }
 
@@ -841,33 +1286,33 @@ function simAnimation(data) {
       if (from === "LoadLock" && to === "TransferChamber") {
         const duration4 = duration_estimate - 2
         onWorkChange(`E0`, { duration: duration4, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration4, onComplete: () => { selectedAnimation.value = index } })
-      }
-      if (from.includes("EtchingChamber") && to === "TransferChamber") {
-        const pos = from.split('EtchingChamber ')[1]
-        const duration5 = duration_estimate - 2
-        onWorkChange(`E${pos}`, { duration: duration5, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration5, onComplete: () => { selectedAnimation.value = index } })
-      }
-      if (from.includes("CleaningChamber")) {
-        const pos = from.split('CleaningChamber ')[1]
-        const duration6 = (duration_estimate - 4) / 2
-        onWorkChange(`F${pos}`, { duration: duration6, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration6 })
-        onWorkChange(`E0`, { duration: duration6, absolutetime: sim_time + duration6 + 2 })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration6 - 2, onComplete: () => { selectedAnimation.value = index } })
+        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration4, onComplete: () => { selectedAnimation.value = index } }, wafer_id)
       }
       if (to.includes("EtchingChamber")) {
         const pos = to.split('EtchingChamber ')[1]
         const duration7 = duration_estimate - 2
         onWorkChange(`E${pos}`, { duration: duration7, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration7, onComplete: () => { selectedAnimation.value = index } })
+        onArmChange(5, { duration: 0.5, absolutetime: sim_time + duration7, onComplete: () => { selectedAnimation.value = index } }, wafer_id, pos)
+      }
+      if (from.includes("EtchingChamber") && to === "TransferChamber") {
+        const pos = from.split('EtchingChamber ')[1]
+        const duration5 = duration_estimate - 2
+        onWorkChange(`E${pos}`, { duration: duration5, absolutetime: sim_time })
+        onArmChange(6, { duration: 0.5, absolutetime: sim_time + duration5, onComplete: () => { selectedAnimation.value = index } }, wafer_id, pos)
       }
       if (to.includes("CleaningChamber")) {
         const pos = to.split('CleaningChamber ')[1]
         const duration8 = duration_estimate - 2
         onWorkChange(`F${pos}`, { duration: duration8, absolutetime: sim_time })
-        onArmChange(3, { duration: 0.5, absolutetime: sim_time + duration8, onComplete: () => { selectedAnimation.value = index } })
+        onArmChange(7, { duration: 0.5, absolutetime: sim_time + duration8, onComplete: () => { selectedAnimation.value = index } }, wafer_id, pos)
+      }
+      if (from.includes("CleaningChamber")) {
+        const pos = from.split('CleaningChamber ')[1]
+        const duration6 = (duration_estimate - 4) / 2
+        onWorkChange(`F${pos}`, { duration: duration6, absolutetime: sim_time })
+        onArmChange(8, { duration: 0.5, absolutetime: sim_time + duration6 }, wafer_id, pos)
+        onWorkChange(`E0`, { duration: duration6, absolutetime: sim_time + duration6 + 2 })
+        onArmChange(9, { duration: 0.5, absolutetime: sim_time + duration6 - 2, onComplete: () => { selectedAnimation.value = index } }, wafer_id)
       }
     }
 
@@ -923,6 +1368,15 @@ function onSpeedChange(val) {
 onBeforeUnmount(() => {
   if (renderer && renderer.domElement) {
     renderer.domElement.removeEventListener('click', onPointerClick)
+  }
+  if (resizeObserver && container.value) {
+    try { resizeObserver.unobserve(container.value); } catch (e) { /* ignore */ }
+    try { resizeObserver.disconnect(); } catch (e) { /* ignore */ }
+    resizeObserver = null;
+  }
+  if (handleResize) {
+    window.removeEventListener('resize', handleResize);
+    handleResize = null;
   }
   if (timer) {
     clearInterval(timer)
@@ -1060,11 +1514,11 @@ onBeforeUnmount(() => {
 }
 
 .panel-table :deep(.table-end) td {
-  background-color: #a6e0b2;
+  background-color: #f3f3f3;
 }
 
 .panel-table :deep(.table-doing) td {
-  background-color: #9792e7;
+  background-color: #d9d9d9;
 }
 
 .event-label-text {
